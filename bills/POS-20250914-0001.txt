@@ -1,0 +1,13 @@
+Bill No: POS-20250914-0001
+Date: 2025-09-14T09:57:27.926946500
+User: operator
+Channel: POS
+----------------------------------------
+PA0001 Panadol 500mg x5 = 175.00
+----------------------------------------
+Subtotal: 175.00
+Discount: 8.75
+Tax: 0.00
+Total: 166.25
+Paid via: CASH
+Paid: 200.00  Change: 33.75
