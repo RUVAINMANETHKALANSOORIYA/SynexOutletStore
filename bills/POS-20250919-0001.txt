@@ -1,0 +1,13 @@
+Bill No: POS-20250919-0001
+Date: 2025-09-19T11:49:21.265577800
+User: operator
+Channel: ONLINE
+----------------------------------------
+IC0001 Ice Cream 500ml x5 = 1500.00
+----------------------------------------
+Subtotal: 1500.00
+Discount: 15.00
+Tax: 0.00
+Total: 1485.00
+Paid via: CARD (**** 1212)
+Paid: 1485.00  Change: 0.00
