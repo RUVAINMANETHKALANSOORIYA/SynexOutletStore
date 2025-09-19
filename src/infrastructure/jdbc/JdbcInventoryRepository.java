@@ -593,4 +593,19 @@ public final class JdbcInventoryRepository implements InventoryRepository {
             return def; // column might not exist before migration; default
         }
     }
+
+    @Override
+    public void setItemRestockLevel(String itemCode, int level) {
+        if (level < 0) throw new IllegalArgumentException("restock level must be >= 0");
+        String sql = "UPDATE items SET restock_level=? WHERE item_code=?";
+        try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, level);
+            ps.setString(2, itemCode);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalStateException("Item not found: " + itemCode);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("setItemRestockLevel failed", e);
+        }
+    }
 }

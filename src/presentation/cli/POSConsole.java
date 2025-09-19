@@ -585,8 +585,10 @@ public final class POSConsole {
             System.out.println("2. Edit Batch Quantities");
             System.out.println("3. Update Batch Expiry");
             System.out.println("4. Delete Batch");
-            System.out.println("5. Move Store -> Shelf (FEFO)");
-            System.out.println("6. Add New Item");
+            System.out.println("5. Move MAIN -> STORE (FEFO)");
+            System.out.println("6. Item Catalog (CRUD)"); // <— NEW submenu
+            System.out.println("7. Move MAIN -> SHELF (FEFO)");
+            System.out.println("8. Move STORE -> SHELF (FEFO)");
             System.out.println("0. Back");
             System.out.print("Choose: ");
             String ch = readLine(sc);
@@ -620,28 +622,120 @@ public final class POSConsole {
                         admin.deleteBatch(id);
                         System.out.println("Batch deleted.");
                     }
-                    case "5" -> {
+                    case "5" -> { // MAIN -> STORE
                         System.out.print("Item code: "); String code = readLine(sc);
-                        System.out.print("Qty to move from STORE to SHELF: "); int q = readInt(sc);
-                        admin.moveStoreToShelfFEFO(code, q);
-                        System.out.println(" Moved " + q + " (STORE -> SHELF) FEFO.");
+                        int shelfBefore = inv.shelfQty(code);
+                        int storeBefore = inv.storeQty(code);
+                        int mainBefore  = inv.mainStoreQty(code);
+                        System.out.println("Before:");
+                        System.out.println("  SHELF=" + shelfBefore + "  STORE=" + storeBefore + "  MAIN=" + mainBefore);
+
+                        if (mainBefore <= 0) {
+                            System.out.println("⚠️ No stock in MAIN to move.");
+                            break;
+                        }
+                        System.out.print("Qty to move MAIN → STORE (max " + mainBefore + "): ");
+                        int q = readInt(sc);
+                        if (q <= 0 || q > mainBefore) { System.out.println("⚠️ Invalid quantity."); break; }
+
+                        admin.moveMainToStoreFEFO(code, q);
+
+                        int shelfAfter = inv.shelfQty(code);
+                        int storeAfter = inv.storeQty(code);
+                        int mainAfter  = inv.mainStoreQty(code);
+                        System.out.println("After:");
+                        System.out.println("  SHELF=" + shelfAfter + "  STORE=" + storeAfter + "  MAIN=" + mainAfter);
+                        System.out.println("✅ Moved " + q + " MAIN → STORE (FEFO).");
                     }
-                    case "6" -> {
+                    case "6" -> itemCatalogMenu(sc); // <— NEW
+                    case "7" -> { // MAIN -> SHELF
+                        System.out.print("Item code: "); String code = readLine(sc);
+                        int shelfBefore = inv.shelfQty(code);
+                        int storeBefore = inv.storeQty(code);
+                        int mainBefore  = inv.mainStoreQty(code);
+                        System.out.println("Before:");
+                        System.out.println("  SHELF=" + shelfBefore + "  STORE=" + storeBefore + "  MAIN=" + mainBefore);
+
+                        if (mainBefore <= 0) {
+                            System.out.println("⚠️ No stock in MAIN to move.");
+                            break;
+                        }
+                        System.out.print("Qty to move MAIN → SHELF (max " + mainBefore + "): ");
+                        int q = readInt(sc);
+                        if (q <= 0 || q > mainBefore) { System.out.println("⚠️ Invalid quantity."); break; }
+
+                        admin.moveMainToShelfFEFO(code, q);
+
+                        int shelfAfter = inv.shelfQty(code);
+                        int storeAfter = inv.storeQty(code);
+                        int mainAfter  = inv.mainStoreQty(code);
+                        System.out.println("After:");
+                        System.out.println("  SHELF=" + shelfAfter + "  STORE=" + storeAfter + "  MAIN=" + mainAfter);
+                        System.out.println("✅ Moved " + q + " MAIN → SHELF (FEFO).");
+                    }
+                    case "8" -> {
+                        System.out.print("Item code: "); String code = readLine(sc);
+                        System.out.print("Qty to move STORE → SHELF: "); int q = readInt(sc);
+                        admin.moveStoreToShelfFEFO(code, q);
+                        System.out.println("✅ Moved " + q + " STORE → SHELF (FEFO).");
+                    }
+                    case "0" -> loop = false;
+                    default -> System.out.println("Invalid choice.");
+                }
+            } catch (Exception ex) {
+                System.out.println("⚠️ Error: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void itemCatalogMenu(Scanner sc) {
+        boolean loop = true;
+        while (loop) {
+            System.out.println("\n--- Item Catalog ---");
+            System.out.println("1. Add New Item");
+            System.out.println("2. Update Item");
+            System.out.println("3. Delete Item");
+            System.out.println("4. List All Items");
+            System.out.println("0. Back");
+            System.out.print("Choose: ");
+            String ch = readLine(sc);
+            try {
+                switch (ch) {
+                    case "1" -> {
                         System.out.print("Item code: "); String code = readLine(sc);
                         System.out.print("Name: "); String name = readLine(sc);
                         System.out.print("Unit price: "); double price = readDouble(sc);
-                        try {
-                            admin.addNewItem(code, name, domain.common.Money.of(price));
-                            System.out.println(" Item added to catalog.");
-                        } catch (Exception ex) {
-                            System.out.println(" Failed to add item: " + ex.getMessage());
+                        admin.addNewItem(code, name, domain.common.Money.of(price));
+                        System.out.println("✅ Item added to catalog.");
+                    }
+                    case "2" -> {
+                        System.out.print("Item code to update: "); String code = readLine(sc);
+                        System.out.print("New name (leave blank to keep current): "); String name = readLine(sc);
+                        System.out.print("New unit price (0 to keep current): "); double price = readDouble(sc);
+
+                    if (!name.isBlank()) admin.renameItem(code, name);
+                        if (price > 0) admin.setItemPrice(code, domain.common.Money.of(price));
+                        System.out.println("✅ Item updated.");
+                    }
+                    case "3" -> {
+                        System.out.print("Item code to delete: "); String code = readLine(sc);
+                        admin.deleteItem(code);
+                        System.out.println("✅ Item deleted.");
+                    }
+                    case "4" -> {
+                        var items = inv.listAllItems();
+                        System.out.println("\nAll Items:");
+                        System.out.printf("%-14s %-30s %s%n", "ITEM CODE", "NAME", "UNIT PRICE");
+                        System.out.println("---------------------------------------------------------------");
+                        for (Item it : items) {
+                            System.out.printf("%-14s %-30s %s%n", it.code(), it.name(), it.unitPrice());
                         }
                     }
                     case "0" -> loop = false;
                     default -> System.out.println("Invalid choice.");
                 }
             } catch (Exception ex) {
-                System.out.println(" Error: " + ex.getMessage());
+                System.out.println("⚠️ Error: " + ex.getMessage());
             }
         }
     }

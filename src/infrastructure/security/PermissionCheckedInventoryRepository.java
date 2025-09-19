@@ -59,6 +59,7 @@ public final class PermissionCheckedInventoryRepository implements InventoryRepo
     @Override public void setItemPrice(String code, Money newPrice) { inner.setItemPrice(code, newPrice); }
     @Override public void deleteItem(String code) { inner.deleteItem(code); }
     @Override public int restockLevel(String itemCode) { return inner.restockLevel(itemCode); }
+    @Override public void setItemRestockLevel(String itemCode, int level) { inner.setItemRestockLevel(itemCode, level); }
     @Override public List<Item> listAllItems() { return inner.listAllItems(); }
     @Override public List<Item> searchItemsByNameOrCode(String query) { return inner.searchItemsByNameOrCode(query); }
 }

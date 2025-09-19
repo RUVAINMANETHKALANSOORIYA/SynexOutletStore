@@ -4,25 +4,19 @@ import application.inventory.FefoBatchSelector;
 import application.inventory.InventoryAdminService;
 import application.inventory.InventoryService;
 import application.inventory.RestockService;
-
 import application.reporting.ReportPrinter;
 import application.reporting.ReportRepository;
 import application.reporting.ReportingService;
-
 import application.auth.AuthService;
 import application.auth.CustomerAuthService;
-
 import application.pos.POSController;
 import application.pricing.PricingService;
-
 import application.events.EventBus;
 import application.events.SimpleEventBus;
 import application.events.events.BillPaid;
 import application.events.events.RestockThresholdHit;
 import application.events.events.StockDepleted;
-
 import domain.billing.BillNumberGenerator;
-
 import infrastructure.console.ConsoleReportPrinter;
 import infrastructure.files.TxtBillWriter;
 import infrastructure.jdbc.JdbcBillNumberGenerator;
@@ -30,16 +24,12 @@ import infrastructure.jdbc.JdbcInventoryRepository;
 import infrastructure.jdbc.JdbcReportRepository;
 import infrastructure.jdbc.JdbcCustomerRepository;
 import infrastructure.jdbc.JdbcUserRepository;
-
 import infrastructure.security.PermissionCheckedInventoryRepository; // <-- Proxy
-
 import persistence.jdbc.JdbcBillRepository;
-
 import ports.out.BillRepository;
 import ports.out.CustomerRepository;
 import ports.out.UserRepository;
 import ports.out.InventoryRepository;
-
 import java.nio.file.Path;
 
 public class Main {

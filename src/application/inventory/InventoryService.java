@@ -20,7 +20,12 @@ public final class InventoryService {
         this.selector = selector;
     }
 
-    /** Convenience: defaults to FEFO selector. */
+    public void moveMainToStoreFEFOWithUser(String code, int qty, String transferredBy) {
+        repo.moveMainToStoreFEFO(code, qty); // Only two arguments allowed
+    }
+
+    @Deprecated(forRemoval = false) // kept for tests/convenience
+    @SuppressWarnings("unused")
     public InventoryService(InventoryRepository repo) {
         this(repo, new FefoBatchSelector());
     }
@@ -78,17 +83,7 @@ public final class InventoryService {
 
     public void moveStoreToShelfFEFO(String code, int qty) { repo.moveStoreToShelfFEFO(code, qty); }
     public void moveMainToShelfFEFO(String code, int qty) { repo.moveMainToShelfFEFO(code, qty); }
-    public void moveMainToStoreFEFO(String code, int qty) {
-        repo.moveMainToStoreFEFO(code, qty); // Only 2 arguments!
-    }
-
-    public void moveMainToStoreFEFOWithUser(String code, int qty, String transferredBy) {
-        if (repo instanceof infrastructure.jdbc.JdbcInventoryRepository) {
-            ((infrastructure.jdbc.JdbcInventoryRepository) repo).moveMainToStoreFEFO(code, qty, transferredBy);
-        } else {
-            repo.moveMainToStoreFEFO(code, qty); // fallback
-        }
-    }
+    public void moveMainToStoreFEFO(String code, int qty) { repo.moveMainToStoreFEFO(code, qty); }
 
     /**
      * Smart plan for a line item:
@@ -149,7 +144,6 @@ public final class InventoryService {
                 else     moveMainToStoreFEFO(code, canTopUpFromMain);
 
                 movedFromMainToSecondary += canTopUpFromMain;
-                mainBefore -= canTopUpFromMain;
                 secondaryBefore += canTopUpFromMain; // logical snapshot
             }
 
@@ -168,7 +162,6 @@ public final class InventoryService {
                     if (pos) moveMainToShelfFEFO(code, canTopUp);
                     else     moveMainToStoreFEFO(code, canTopUp);
                     movedFromMainForBackfill += canTopUp;
-                    mainBefore -= canTopUp;
                 }
             }
         }
