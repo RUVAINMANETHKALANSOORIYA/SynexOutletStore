@@ -23,18 +23,20 @@ public interface ReportRepository {
     /** Bill headers between [from, to]. */
     List<BillRow> billsBetween(LocalDate from, LocalDate to);
 
-    // ---- Records (DTOs) ----
-    public record DailySalesRow(LocalDate day, long bills, String revenue, String discounts, long items) {}
-    public record BestSellerRow(String itemCode, String name, long qtySold, String revenue) {}
-    public record RevenueRow(LocalDate day, String revenue) {}
-    record RestockRow(String itemCode, String itemName, int shelfQty, int storeQty, int mainQty, int restockLevel) {}
+    /** Items at or below restock level. */
     List<RestockRow> restockAtOrBelowLevel();
 
+    // ---- Records (DTOs) ----
+    record DailySalesRow(LocalDate day, long bills, String revenue, String discounts, long items) {}
+    record BestSellerRow(String itemCode, String name, long qtySold, String revenue) {}
+    record RevenueRow(LocalDate day, String revenue) {}
+    record RestockRow(String itemCode, String itemName, int shelfQty, int storeQty, int mainQty, int restockLevel) {}
+
     // New DTOs
-    public record ReshelvingRow(String itemCode, String name, int shelfQty, int storeQty, int suggestedMove) {}
-    public record ReorderRow(String itemCode, String name, int totalQty) {}
-    public record StockBatchRow(long batchId, String itemCode, String name, java.time.LocalDate expiry, int qtyOnShelf, int qtyInStore) {}
-    public record BillRow(
+    record ReshelvingRow(String itemCode, String name, int shelfQty, int storeQty, int suggestedMove) {}
+    record ReorderRow(String itemCode, String name, int totalQty) {}
+    record StockBatchRow(long batchId, String itemCode, String name, java.time.LocalDate expiry, int qtyOnShelf, int qtyInStore) {}
+    record BillRow(
             String billNo, java.time.LocalDateTime createdAt, String userName, String channel,
             String paymentMethod, String subtotal, String discount, String tax, String total
     ) {}

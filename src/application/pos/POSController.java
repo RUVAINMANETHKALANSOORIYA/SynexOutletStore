@@ -14,8 +14,16 @@ import domain.pricing.DiscountPolicy;
 import application.pricing.PricingService;
 import ports.out.BillRepository;
 
+import application.events.EventBus;
+import application.events.NoopEventBus;
+import application.events.events.BillPaid;
+import application.events.events.RestockThresholdHit;
+import application.events.events.StockDepleted;
+
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class POSController {
     private final InventoryService inventory;
@@ -23,28 +31,37 @@ public final class POSController {
     private final BillNumberGenerator billNos;
     private final BillRepository bills;
     private final BillWriter writer;
+    private final EventBus events; // Observer
 
     private Bill active = null;
     private DiscountPolicy activeDiscount = null;
-    private final List<InventoryReservation> reservations = new ArrayList<>();
+
+    // track reservations by area
+    private final List<InventoryReservation> shelfReservations = new ArrayList<>();
+    private final List<InventoryReservation> storeReservations = new ArrayList<>();
+
     private Payment.Receipt paymentReceipt = null;
 
-    // ---- Step 8: User & Channel (defaults) ----
     private String currentUser = "operator";
     private String currentChannel = "POS";
 
+    // Backward-compatible constructor (no events)
     public POSController(InventoryService inv, PricingService pr, BillNumberGenerator gen, BillRepository br, BillWriter bw) {
+        this(inv, pr, gen, br, bw, new NoopEventBus());
+    }
+
+    // New constructor with EventBus
+    public POSController(InventoryService inv, PricingService pr, BillNumberGenerator gen, BillRepository br, BillWriter bw, EventBus events) {
         this.inventory = inv;
         this.pricing = pr;
         this.billNos = gen;
         this.bills = br;
         this.writer = bw;
+        this.events = (events == null) ? new NoopEventBus() : events;
     }
 
-    // allow UI/CLI to set user & channel
     public void setUser(String user) {
         this.currentUser = (user == null || user.isBlank()) ? "operator" : user.trim();
-        // if a bill is already active, reflect change immediately
         if (active != null) active.setUserName(this.currentUser);
     }
     public void setChannel(String channel) {
@@ -55,27 +72,51 @@ public final class POSController {
     public void newBill() {
         if (active != null) throw new IllegalStateException("Already active");
         active = new Bill(billNos.next());
-        // attach current meta to this bill
         active.setUserName(currentUser);
         active.setChannel(currentChannel);
 
-        reservations.clear();
+        shelfReservations.clear();
+        storeReservations.clear();
         activeDiscount = null;
         paymentReceipt = null;
     }
 
+    /** Legacy addItem (kept). */
     public void addItem(String code, int qty) {
         ensure();
-        var res = inventory.reserveByChannel(code, qty, currentChannel); // ✅ channel-aware
-        reservations.addAll(res);
+        var res = inventory.reserveByChannel(code, qty, currentChannel);
+        if ("POS".equalsIgnoreCase(currentChannel)) {
+            storeReservations.addAll(res);
+        } else {
+            shelfReservations.addAll(res);
+        }
         var line = new BillLine(code, inventory.itemName(code), inventory.priceOf(code), qty, res);
         active.addLine(line);
+    }
+
+    /** Smart add (kept). */
+    public InventoryService.SmartPick addItemSmart(String code, int qty,
+                                                   boolean approveUseOtherSide,
+                                                   boolean managerApprovedBackfill) {
+        ensure();
+        var pick = inventory.reserveSmart(code, qty, currentChannel, approveUseOtherSide, managerApprovedBackfill);
+
+        shelfReservations.addAll(pick.shelfReservations);
+        storeReservations.addAll(pick.storeReservations);
+
+        var combined = new ArrayList<InventoryReservation>(pick.shelfReservations.size() + pick.storeReservations.size());
+        combined.addAll(pick.shelfReservations);
+        combined.addAll(pick.storeReservations);
+
+        var line = new BillLine(code, inventory.itemName(code), inventory.priceOf(code), qty, combined);
+        active.addLine(line);
+
+        return pick;
     }
 
     public void removeItem(String code) {
         ensure();
         active.removeLineByCode(code);
-        // (optional) implement reservation release if you want to return stock
     }
 
     public void applyDiscount(DiscountPolicy p) {
@@ -89,7 +130,6 @@ public final class POSController {
         return active.total();
     }
 
-    // -------- Optional pre-domain.payment APIs (still supported) --------
     public void payCash(double amount) {
         ensure();
         pricing.finalizePricing(active, activeDiscount);
@@ -106,7 +146,6 @@ public final class POSController {
         active.setPayment(paymentReceipt);
     }
 
-    // -------- New: checkout & pay in a single call --------
     public void checkoutCash(double amount) {
         ensure();
         pricing.finalizePricing(active, activeDiscount);
@@ -125,7 +164,6 @@ public final class POSController {
         persistAndReset();
     }
 
-    // -------- Legacy: checkout only (requires pre-domain.payment) --------
     public void checkout() {
         ensure();
         pricing.finalizePricing(active, activeDiscount);
@@ -139,9 +177,32 @@ public final class POSController {
 
         bills.save(active);
         writer.write(active);
-        inventory.commitReservationByChannel(reservations, currentChannel); // ✅ channel-aware commit
+
+        // Commit by area
+        if (!shelfReservations.isEmpty()) inventory.commitReservation(shelfReservations);
+        if (!storeReservations.isEmpty()) inventory.commitStoreReservation(storeReservations);
+
+        // ===== Observer: publish bill + stock events =====
+        events.publish(new BillPaid(active.number(), active.total(), currentChannel, currentUser));
+
+        // dedupe item codes in this bill
+        Set<String> codes = new LinkedHashSet<>();
+        for (BillLine l : active.lines()) codes.add(l.itemCode());
+        for (String code : codes) {
+            int shelf = inventory.shelfQty(code);
+            int store = inventory.storeQty(code);
+            int totalLeft = shelf + store;
+            int threshold = Math.max(50, inventory.restockLevel(code));
+            if (totalLeft == 0) {
+                events.publish(new StockDepleted(code));
+            } else if (totalLeft <= threshold) {
+                events.publish(new RestockThresholdHit(code, totalLeft, threshold));
+            }
+        }
+
         active = null;
-        reservations.clear();
+        shelfReservations.clear();
+        storeReservations.clear();
         activeDiscount = null;
         paymentReceipt = null;
     }

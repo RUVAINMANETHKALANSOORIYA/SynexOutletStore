@@ -30,35 +30,10 @@ public final class JdbcCustomerRepository implements CustomerRepository {
     }
 
     @Override
-    public Optional<Customer> findByEmail(String email) {
-        String sql = "SELECT id, username, email, password_hash, status FROM customers WHERE email=?";
-        try (Connection conn = Db.get();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, email);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return Optional.empty();
-                return Optional.of(new Customer(
-                        rs.getLong("id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        rs.getString("password_hash"),
-                        null, // phone not in current schema
-                        rs.getString("status")
-                ));
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to find customer by email", e);
-        }
-    }
-
-    @Override
     public void save(String username, String passwordHash, String email) {
         String sql = """
-            INSERT INTO customers (username, email, password_hash)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                username      = VALUES(username),
-                password_hash = VALUES(password_hash)
+            INSERT INTO customers (username, email, password_hash, status)
+            VALUES (?, ?, ?, 'ACTIVE')
             """;
         try (Connection conn = Db.get();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -67,7 +42,7 @@ public final class JdbcCustomerRepository implements CustomerRepository {
             ps.setString(3, passwordHash);
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to upsert customer (by username/email)", e);
+            throw new RuntimeException("Failed to save customer", e);
         }
     }
 
@@ -94,6 +69,28 @@ public final class JdbcCustomerRepository implements CustomerRepository {
     }
 
     @Override
+    public Optional<Customer> findByEmail(String email) {
+        String sql = "SELECT id, username, email, password_hash, status FROM customers WHERE email=?";
+        try (Connection conn = Db.get();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(new Customer(
+                        rs.getLong("id"),
+                        rs.getString("username"),
+                        rs.getString("email"),
+                        rs.getString("password_hash"),
+                        null, // phone not in current schema
+                        rs.getString("status")
+                ));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to find customer by email", e);
+        }
+    }
+
+    @Override
     public String loadPasswordHash(String username) {
         String sql = "SELECT password_hash FROM customers WHERE username=?";
         try (Connection conn = Db.get();
@@ -103,7 +100,7 @@ public final class JdbcCustomerRepository implements CustomerRepository {
                 return rs.next() ? rs.getString("password_hash") : null;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to load password hash by username", e);
+            throw new RuntimeException("Failed to load password hash", e);
         }
     }
 }

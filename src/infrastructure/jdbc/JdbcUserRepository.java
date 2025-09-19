@@ -1,4 +1,4 @@
-package persistence.jdbc;
+package infrastructure.jdbc;
 
 import domain.auth.User;
 import ports.out.UserRepository;

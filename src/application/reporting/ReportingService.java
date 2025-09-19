@@ -3,7 +3,6 @@ package application.reporting;
 import java.time.LocalDate;
 import java.util.List;
 
-
 public final class ReportingService {
     private final ReportRepository repo;
     private final ReportPrinter printer;
@@ -32,7 +31,7 @@ public final class ReportingService {
         List<ReportPrinter.ReshelvingRow> view = rows.stream()
                 .map(r -> new ReportPrinter.ReshelvingRow(
                         r.itemCode(),
-                        r.name(),            // <-- was itemName()
+                        r.name(),
                         r.shelfQty(),
                         r.storeQty(),
                         r.suggestedMove()
@@ -47,21 +46,39 @@ public final class ReportingService {
         List<ReportPrinter.ReorderRow> view = rows.stream()
                 .map(r -> new ReportPrinter.ReorderRow(
                         r.itemCode(),
-                        r.name(),            // <-- was itemName()
+                        r.name(),
                         r.totalQty()
                 ))
                 .toList();
         printer.printReorder(view, threshold);
     }
 
+    /**
+     * Restock Report:
+     * Your repo.restockAtOrBelowLevel() should implement the rule:
+     *   show item when (shelf_qty + store_qty) <= max(50, restock_level)
+     */
     public void printRestock() {
         var rows = repo.restockAtOrBelowLevel();
         var view = rows.stream()
-                .map(r -> new ReportPrinter.RestockRow(r.itemCode(), r.itemName(), r.shelfQty(), r.storeQty(), r.mainQty(), r.restockLevel()))
+                .map(r -> new ReportPrinter.RestockRow(
+                        r.itemCode(),
+                        r.itemName(),
+                        r.shelfQty(),
+                        r.storeQty(),
+                        r.mainQty(),
+                        r.restockLevel()
+                ))
                 .toList();
         printer.printRestock(view);
     }
 
+    /**
+     * Return raw restock data for POSConsole to format itself
+     */
+    public List<ReportRepository.RestockRow> restockAtOrBelowLevel() {
+        return repo.restockAtOrBelowLevel();
+    }
 
     // ----- Stock Report -----
     public void printStockByBatch(String itemCodeOrNull) {
@@ -70,7 +87,7 @@ public final class ReportingService {
                 .map(r -> new ReportPrinter.StockBatchRow(
                         r.batchId(),
                         r.itemCode(),
-                        r.name(),            // <-- was itemName()
+                        r.name(),
                         r.expiry(),
                         r.qtyOnShelf(),
                         r.qtyInStore()
@@ -104,7 +121,7 @@ public final class ReportingService {
         var list = rows.stream()
                 .map(r -> new ReportPrinter.BestSeller(
                         r.itemCode(),
-                        r.name(),        // ensure repo DTO exposes name()
+                        r.name(),
                         r.qtySold(),
                         r.revenue()
                 ))

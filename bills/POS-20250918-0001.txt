@@ -1,13 +1,13 @@
 Bill No: POS-20250918-0001
-Date: 2025-09-18T00:19:20.359417200
+Date: 2025-09-18T22:57:57.457100800
 User: operator
-Channel: ONLINE
+Channel: POS
 ----------------------------------------
-PA0001 Panadol 500mg x44 = 1540.00
+TE0001 Tea Pack x20 = 5000.00
 ----------------------------------------
-Subtotal: 1540.00
-Discount: 0.00
+Subtotal: 5000.00
+Discount: 100.00
 Tax: 0.00
-Total: 1540.00
-Paid via: CARD (**** 4212)
-Paid: 1540.00  Change: 0.00
+Total: 4900.00
+Paid via: CASH
+Paid: 5000.00  Change: 100.00

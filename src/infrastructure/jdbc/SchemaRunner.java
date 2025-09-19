@@ -1,4 +1,4 @@
-package persistence.jdbc;
+package infrastructure.jdbc;
 
 import java.io.BufferedReader;
 import java.io.InputStream;

@@ -16,17 +16,24 @@ public final class JdbcInventoryRepository implements InventoryRepository {
 
     @Override
     public Optional<Item> findItemByCode(String itemCode) {
-        String sql = "SELECT id, item_code, name, unit_price FROM items WHERE item_code=?";
+        // Include restock_level if the column exists (your migration adds it).
+        String sql = "SELECT id, item_code, name, unit_price, restock_level FROM items WHERE item_code=?";
         try (Connection c = Db.get();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, itemCode);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return Optional.empty();
+                int restock = 50;
+                try {
+                    restock = rs.getInt("restock_level");
+                    if (rs.wasNull()) restock = 50;
+                } catch (SQLException ignore) { /* if column missing, keep default 50 */ }
                 return Optional.of(new Item(
                         rs.getLong("id"),
                         rs.getString("item_code"),
                         rs.getString("name"),
-                        new Money(rs.getBigDecimal("unit_price"))
+                        new Money(rs.getBigDecimal("unit_price")),
+                        restock
                 ));
             }
         } catch (SQLException e) {
@@ -52,10 +59,10 @@ public final class JdbcInventoryRepository implements InventoryRepository {
     @Override
     public List<Batch> findBatchesOnShelf(String itemCode) {
         String sql = """
-            SELECT id, item_code, expiry, qty_on_shelf, qty_in_store
+            SELECT id, item_code, expiry, qty_on_shelf, qty_in_store, qty_in_main
             FROM batches
             WHERE item_code=? AND qty_on_shelf > 0
-            ORDER BY (expiry IS NULL), expiry ASC
+            ORDER BY (expiry IS NULL), expiry ASC, id ASC
             """;
         List<Batch> list = new ArrayList<>();
         try (Connection c = Db.get();
@@ -69,7 +76,8 @@ public final class JdbcInventoryRepository implements InventoryRepository {
                             rs.getString("item_code"),
                             d == null ? null : d.toLocalDate(),
                             rs.getInt("qty_on_shelf"),
-                            rs.getInt("qty_in_store")
+                            rs.getInt("qty_in_store"),
+                            getSafeInt(rs, "qty_in_main")
                     ));
                 }
             }
@@ -110,10 +118,10 @@ public final class JdbcInventoryRepository implements InventoryRepository {
     @Override
     public List<Batch> findBatchesInStore(String itemCode) {
         String sql = """
-            SELECT id, item_code, expiry, qty_on_shelf, qty_in_store
+            SELECT id, item_code, expiry, qty_on_shelf, qty_in_store, qty_in_main
             FROM batches
             WHERE item_code=? AND qty_in_store > 0
-            ORDER BY (expiry IS NULL), expiry ASC
+            ORDER BY (expiry IS NULL), expiry ASC, id ASC
             """;
         List<Batch> list = new ArrayList<>();
         try (Connection c = Db.get();
@@ -127,7 +135,8 @@ public final class JdbcInventoryRepository implements InventoryRepository {
                             rs.getString("item_code"),
                             d == null ? null : d.toLocalDate(),
                             rs.getInt("qty_on_shelf"),
-                            rs.getInt("qty_in_store")
+                            rs.getInt("qty_in_store"),
+                            getSafeInt(rs, "qty_in_main")
                     ));
                 }
             }
@@ -165,7 +174,7 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ---- Restock support ----
+    // ---- Totals (with MAIN) ----
     @Override
     public int shelfQty(String itemCode) {
         String sql = "SELECT COALESCE(SUM(qty_on_shelf),0) FROM batches WHERE item_code=?";
@@ -190,8 +199,13 @@ public final class JdbcInventoryRepository implements InventoryRepository {
 
     @Override
     public int mainStoreQty(String itemCode) {
-        // TODO: Implement logic to return quantity in main store area
-        return 0;
+        String sql = "SELECT COALESCE(SUM(qty_in_main),0) FROM batches WHERE item_code=?";
+        try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, itemCode);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1); }
+        } catch (SQLException e) {
+            throw new RuntimeException("mainStoreQty failed", e);
+        }
     }
 
     @Override
@@ -199,10 +213,10 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         if (qty <= 0) return;
 
         String select = """
-            SELECT id, qty_on_shelf, qty_in_store
+            SELECT id, qty_in_store
             FROM batches
             WHERE item_code=? AND qty_in_store > 0
-            ORDER BY (expiry IS NULL), expiry ASC
+            ORDER BY (expiry IS NULL), expiry ASC, id ASC
             FOR UPDATE
             """;
         String update = "UPDATE batches SET qty_on_shelf = qty_on_shelf + ?, qty_in_store = qty_in_store - ? WHERE id=?";
@@ -251,7 +265,6 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ---------- ITEM (catalog) CRUD ----------
     @Override
     public void createItem(String itemCode, String name, Money unitPrice) {
         String sql = "INSERT INTO items (item_code, name, unit_price) VALUES (?,?,?)";
@@ -300,7 +313,6 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ---------- Batch admin ----------
     @Override
     public void addBatch(String itemCode, LocalDate expiry, int qtyOnShelf, int qtyInStore) {
         if (itemCode == null || itemCode.isBlank())
@@ -374,10 +386,8 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ---------- NEW: Restock level ----------
     @Override
     public int restockLevel(String itemCode) {
-        // If you added a column items.restock_level, we read it; otherwise default to 50.
         final String sql = "SELECT restock_level FROM items WHERE item_code=?";
         try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, itemCode);
@@ -394,13 +404,193 @@ public final class JdbcInventoryRepository implements InventoryRepository {
 
     @Override
     public void moveMainToStoreFEFO(String itemCode, int qty) {
-        // TODO: Implement main store to store movement logic (FEFO)
-        throw new UnsupportedOperationException("moveMainToStoreFEFO not implemented yet.");
+        moveMainToStoreFEFO(itemCode, qty, "system");
+    }
+
+    public void moveMainToStoreFEFO(String itemCode, int qty, String transferredBy) {
+        if (qty <= 0) return;
+
+        String select = "SELECT id, qty_in_main FROM batches " +
+                        "WHERE item_code=? AND qty_in_main > 0 " +
+                        "ORDER BY (expiry IS NULL), expiry ASC, id ASC FOR UPDATE";
+        String update = "UPDATE batches SET qty_in_main = qty_in_main - ?, qty_in_store = qty_in_store + ? WHERE id=?";
+        String logTransfer = "INSERT INTO transfers (item_code, batch_id, qty, transferred_by) VALUES (?,?,?,?)";
+
+        try (Connection c = Db.get()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement psSel = c.prepareStatement(select);
+                 PreparedStatement psUpd = c.prepareStatement(update);
+                 PreparedStatement psLog = c.prepareStatement(logTransfer)) {
+
+                psSel.setString(1, itemCode);
+                int remaining = qty;
+                int moved = 0;
+
+                try (ResultSet rs = psSel.executeQuery()) {
+                    while (rs.next() && remaining > 0) {
+                        long id = rs.getLong("id");
+                        int inMain = rs.getInt("qty_in_main");
+                        if (inMain <= 0) continue;
+
+                        int move = Math.min(inMain, remaining);
+                        psUpd.setInt(1, move);
+                        psUpd.setInt(2, move);
+                        psUpd.setLong(3, id);
+                        psUpd.addBatch();
+
+                        psLog.setString(1, itemCode);
+                        psLog.setLong(2, id);
+                        psLog.setInt(3, move);
+                        psLog.setString(4, transferredBy == null ? "system" : transferredBy);
+                        psLog.addBatch();
+
+                        remaining -= move;
+                        moved += move;
+                    }
+                }
+
+                if (moved == 0) {
+                    c.rollback();
+                    throw new IllegalStateException("No stock in MAIN to move (to STORE) for " + itemCode);
+                }
+
+                psUpd.executeBatch();
+                psLog.executeBatch();
+                c.commit();
+            } catch (Exception ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("moveMainToStoreFEFO failed", e);
+        }
     }
 
     @Override
     public void moveMainToShelfFEFO(String itemCode, int qty) {
-        // TODO: Implement main store to shelf movement logic (FEFO)
-        throw new UnsupportedOperationException("moveMainToShelfFEFO not implemented yet.");
+        if (qty <= 0) return;
+
+        String select = """
+            SELECT id, qty_in_main
+            FROM batches
+            WHERE item_code=? AND qty_in_main > 0
+            ORDER BY (expiry IS NULL), expiry ASC, id ASC
+            FOR UPDATE
+            """;
+        String update = "UPDATE batches SET qty_in_main = qty_in_main - ?, qty_on_shelf = qty_on_shelf + ? WHERE id=?";
+
+        try (Connection c = Db.get()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement psSel = c.prepareStatement(select);
+                 PreparedStatement psUpd = c.prepareStatement(update)) {
+
+                psSel.setString(1, itemCode);
+                int remaining = qty;
+                int moved = 0;
+
+                try (ResultSet rs = psSel.executeQuery()) {
+                    while (rs.next() && remaining > 0) {
+                        long id = rs.getLong("id");
+                        int inMain = rs.getInt("qty_in_main");
+                        if (inMain <= 0) continue;
+
+                        int move = Math.min(inMain, remaining);
+                        psUpd.setInt(1, move);
+                        psUpd.setInt(2, move);
+                        psUpd.setLong(3, id);
+                        psUpd.addBatch();
+
+                        remaining -= move;
+                        moved += move;
+                    }
+                }
+
+                if (moved == 0) {
+                    c.rollback();
+                    throw new IllegalStateException("No stock in MAIN to move (to SHELF) for " + itemCode);
+                }
+
+                psUpd.executeBatch();
+                c.commit();
+            } catch (Exception ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("moveMainToShelfFEFO failed", e);
+        }
+    }
+
+    // ===== NEW: Catalog listing/search =====
+    @Override
+    public List<Item> listAllItems() {
+        String sql = "SELECT id, item_code, name, unit_price, restock_level FROM items ORDER BY item_code ASC";
+        List<Item> list = new ArrayList<>();
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int restock = safeGetInt(rs, "restock_level", 50);
+                list.add(new Item(
+                        rs.getLong("id"),
+                        rs.getString("item_code"),
+                        rs.getString("name"),
+                        new Money(rs.getBigDecimal("unit_price")),
+                        restock
+                ));
+            }
+            return list;
+        } catch (SQLException e) {
+            throw new RuntimeException("listAllItems failed", e);
+        }
+    }
+
+    @Override
+    public List<Item> searchItemsByNameOrCode(String query) {
+        String sql = """
+            SELECT id, item_code, name, unit_price, restock_level
+            FROM items
+            WHERE item_code LIKE ? OR name LIKE ?
+            ORDER BY item_code ASC
+            """;
+        List<Item> list = new ArrayList<>();
+        String like = "%" + (query == null ? "" : query.trim()) + "%";
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, like);
+            ps.setString(2, like);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int restock = safeGetInt(rs, "restock_level", 50);
+                    list.add(new Item(
+                            rs.getLong("id"),
+                            rs.getString("item_code"),
+                            rs.getString("name"),
+                            new Money(rs.getBigDecimal("unit_price")),
+                            restock
+                    ));
+                }
+            }
+            return list;
+        } catch (SQLException e) {
+            throw new RuntimeException("searchItemsByNameOrCode failed", e);
+        }
+    }
+
+    // ---- helpers ----
+    private static int getSafeInt(ResultSet rs, String col) {
+        try { return rs.getInt(col); } catch (SQLException e) { return 0; }
+    }
+    private static int safeGetInt(ResultSet rs, String col, int def) {
+        try {
+            int v = rs.getInt(col);
+            return rs.wasNull() ? def : v;
+        } catch (SQLException e) {
+            return def; // column might not exist before migration; default
+        }
     }
 }

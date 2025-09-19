@@ -248,7 +248,35 @@ public final class JdbcReportRepository implements ReportRepository {
 
     @Override
     public List<RestockRow> restockAtOrBelowLevel() {
-        // TODO: Implement restock report logic
-        throw new UnsupportedOperationException("restockAtOrBelowLevel not implemented yet.");
+        String sql = """
+            SELECT i.item_code, i.name,
+                   COALESCE(SUM(b.qty_on_shelf),0) AS shelf_qty,
+                   COALESCE(SUM(b.qty_in_store),0) AS store_qty,
+                   COALESCE(SUM(b.qty_in_main),0) AS main_qty,
+                   COALESCE(i.restock_level, 50) AS restock_level
+            FROM items i
+            LEFT JOIN batches b ON b.item_code=i.item_code
+            GROUP BY i.item_code, i.name, i.restock_level
+            HAVING (shelf_qty + store_qty + main_qty) <= GREATEST(50, restock_level)
+            ORDER BY shelf_qty + store_qty + main_qty ASC, i.item_code
+            """;
+        List<RestockRow> list = new ArrayList<>();
+        try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new RestockRow(
+                        rs.getString("item_code"),
+                        rs.getString("name"),
+                        rs.getInt("shelf_qty"),
+                        rs.getInt("store_qty"),
+                        rs.getInt("main_qty"),
+                        rs.getInt("restock_level")
+                    ));
+                }
+            }
+            return list;
+        } catch (SQLException e) {
+            throw new RuntimeException("restockAtOrBelowLevel failed", e);
+        }
     }
 }

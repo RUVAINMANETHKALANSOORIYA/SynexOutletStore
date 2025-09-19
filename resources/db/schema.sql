@@ -3,38 +3,40 @@ USE posdb;
 
 -- Auth
 CREATE TABLE IF NOT EXISTS users (
-                                     UserID       INT AUTO_INCREMENT PRIMARY KEY,
-                                     Username     VARCHAR(64) NOT NULL UNIQUE,
+    UserID       INT AUTO_INCREMENT PRIMARY KEY,
+    Username     VARCHAR(64) NOT NULL UNIQUE,
     PasswordHash VARCHAR(255) NOT NULL,
     Role         VARCHAR(32) NOT NULL,
     Email        VARCHAR(128),
     Phone        VARCHAR(32),
     Status       VARCHAR(16) DEFAULT 'ACTIVE'
-    ) ENGINE=InnoDB;
+) ENGINE=InnoDB;
 
 -- POS master data (what your code reads)
 CREATE TABLE IF NOT EXISTS items (
-                                     id         BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                     item_code  VARCHAR(32) NOT NULL UNIQUE,
+    id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+    item_code  VARCHAR(32) NOT NULL UNIQUE,
     name       VARCHAR(200) NOT NULL,
-    unit_price DECIMAL(10,2) NOT NULL
-    ) ENGINE=InnoDB;
+    unit_price DECIMAL(10,2) NOT NULL,
+    restock_level INT NOT NULL DEFAULT 50
+) ENGINE=InnoDB;
 
 -- FEFO stock by batch
 CREATE TABLE IF NOT EXISTS batches (
-                                       id            BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                       item_code     VARCHAR(32) NOT NULL,
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    item_code     VARCHAR(32) NOT NULL,
     expiry        DATE NULL,
     qty_on_shelf  INT NOT NULL DEFAULT 0,
     qty_in_store  INT NOT NULL DEFAULT 0,
+    qty_in_main   INT NOT NULL DEFAULT 1000,
     INDEX idx_batches_item (item_code),
     INDEX idx_batches_expiry (expiry)
-    ) ENGINE=InnoDB;
+) ENGINE=InnoDB;
 
 -- Bills + lines (your persistence + reporting)
 CREATE TABLE IF NOT EXISTS bills (
-                                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                     bill_no      VARCHAR(64) NOT NULL,
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    bill_no      VARCHAR(64) NOT NULL,
     created_at   DATETIME    NOT NULL,
     subtotal     DECIMAL(10,2) NOT NULL,
     discount     DECIMAL(10,2) NOT NULL,
@@ -46,18 +48,18 @@ CREATE TABLE IF NOT EXISTS bills (
     card_last4     VARCHAR(4),
     channel        VARCHAR(16),
     user_name      VARCHAR(64)
-    ) ENGINE=InnoDB;
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS bill_lines (
-                                          id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                                          bill_id    BIGINT NOT NULL,
-                                          item_code  VARCHAR(32) NOT NULL,
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    bill_id    BIGINT NOT NULL,
+    item_code  VARCHAR(32) NOT NULL,
     qty        INT NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
     line_total DECIMAL(10,2) NOT NULL,
     INDEX idx_bill_lines_bill (bill_id),
     CONSTRAINT fk_bill_lines_bill FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB;
+) ENGINE=InnoDB;
 
 -- Seed
 INSERT IGNORE INTO users (Username, PasswordHash, Role, Email)
@@ -67,26 +69,23 @@ VALUES ('operator', 'nopass-dev', 'CASHIER', 'operator@example.com');
 INSERT IGNORE INTO users (Username, PasswordHash, Role, Email)
 VALUES ('invmanager', '123456', 'INVENTORY_MANAGER', 'invmanager@example.com');
 
-
-
 INSERT IGNORE INTO items (item_code, name, unit_price)
 VALUES ('PA0001','Panadol 500mg', 35.00),
        ('CO0001','Coca-Cola 330ml', 12.00);
 
-INSERT INTO batches (item_code, expiry, qty_on_shelf, qty_in_store)
+INSERT INTO batches (item_code, expiry, qty_on_shelf, qty_in_store, qty_in_main)
 VALUES
-    ('PA0001', DATE_ADD(CURDATE(), INTERVAL 180 DAY), 20, 80),
-    ('CO0001', NULL, 30, 70);
-
+    ('PA0001', DATE_ADD('2025-09-18', INTERVAL 180 DAY), 20, 80, 1000),
+    ('CO0001', NULL, 30, 70, 1000);
 
 -- Customers for ONLINE purchases
 CREATE TABLE IF NOT EXISTS customers (
-                                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                                         username     VARCHAR(64) NOT NULL UNIQUE,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username     VARCHAR(64) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     email        VARCHAR(128),
     status       VARCHAR(16) DEFAULT 'ACTIVE'
-    ) ENGINE=InnoDB;
+) ENGINE=InnoDB;
 
 -- Seed demo customers
 INSERT IGNORE INTO customers (username, password_hash, email)
@@ -146,10 +145,19 @@ INSERT INTO batches (item_code, expiry, qty_on_shelf, qty_in_store) VALUES
 ('SN0001', '2026-08-14', 20, 80);
 
 
--- ITEMS: add a restock_level per SKU (threshold)
-ALTER TABLE items
-    ADD COLUMN IF NOT EXISTS restock_level INT NOT NULL DEFAULT 50;
-
--- BATCHES: add a main store bucket (deep warehouse)
+# -- Add MAIN store column on batches
 ALTER TABLE batches
-    ADD COLUMN IF NOT EXISTS qty_in_main_store INT NOT NULL DEFAULT 0;
+    ADD COLUMN qty_in_main INT NOT NULL DEFAULT 1000 AFTER qty_in_store;
+
+-- Add per-item restock level (your code now reads this)
+ALTER TABLE items
+    ADD COLUMN restock_level INT NOT NULL DEFAULT 50 AFTER unit_price;
+
+CREATE TABLE IF NOT EXISTS transfers (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    item_code VARCHAR(16) NOT NULL,
+    batch_id BIGINT,
+    qty INT NOT NULL,
+    transferred_by VARCHAR(64) NOT NULL,
+    transferred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
