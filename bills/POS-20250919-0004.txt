@@ -1,0 +1,12 @@
+Bill No: POS-20250919-0004
+Date: 2025-09-19T21:33:43.827989600
+User: operator
+Channel: ONLINE
+----------------------------------------
+----------------------------------------
+Subtotal: LKR 0.00
+Discount: LKR 0.00
+Tax: LKR 0.00
+Total: LKR 0.00
+Paid via: CARD (**** 0000)
+Paid: LKR 0.00  Change: LKR 0.00

@@ -1,0 +1,13 @@
+Bill No: POS-20250919-0003
+Date: 2025-09-19T15:31:27.342889700
+User: operator
+Channel: ONLINE
+----------------------------------------
+OR0001 Orange Juice 1L x20 = 3000.00
+----------------------------------------
+Subtotal: 3000.00
+Discount: 60.00
+Tax: 0.00
+Total: 2940.00
+Paid via: CARD (**** 4212)
+Paid: 2940.00  Change: 0.00

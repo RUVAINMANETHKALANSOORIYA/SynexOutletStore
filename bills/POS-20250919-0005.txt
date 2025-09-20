@@ -1,0 +1,13 @@
+Bill No: POS-20250919-0005
+Date: 2025-09-19T22:13:55.546561700
+User: operator
+Channel: POS
+----------------------------------------
+SN0001 Snacks Chips x120 = LKR 10,800.00
+----------------------------------------
+Subtotal: LKR 10,800.00
+Discount: LKR 216.00
+Tax: LKR 0.00
+Total: LKR 10,584.00
+Paid via: CASH
+Paid: LKR 11,000.00  Change: LKR 416.00
