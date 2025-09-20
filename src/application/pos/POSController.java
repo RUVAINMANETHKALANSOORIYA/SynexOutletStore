@@ -126,6 +126,7 @@ public final class POSController {
 
     public Money total() {
         ensure();
+        ensureItemsAdded();
         pricing.finalizePricing(active, activeDiscount);
         return active.total();
     }
@@ -148,6 +149,7 @@ public final class POSController {
 
     public void checkoutCash(double amount) {
         ensure();
+        ensureItemsAdded();
         pricing.finalizePricing(active, activeDiscount);
         var cash = new CashPayment();
         this.paymentReceipt = cash.pay(active.total(), Money.of(amount));
@@ -157,6 +159,7 @@ public final class POSController {
 
     public void checkoutCard(String last4) {
         ensure();
+        ensureItemsAdded();
         pricing.finalizePricing(active, activeDiscount);
         var card = new CardPayment(last4);
         this.paymentReceipt = card.pay(active.total(), active.total());
@@ -166,6 +169,7 @@ public final class POSController {
 
     public void checkout() {
         ensure();
+        ensureItemsAdded();
         pricing.finalizePricing(active, activeDiscount);
         if (paymentReceipt == null) throw new IllegalStateException("Payment not completed");
         persistAndReset();
@@ -209,5 +213,11 @@ public final class POSController {
 
     private void ensure() {
         if (active == null) throw new IllegalStateException("No active bill");
+    }
+
+    private void ensureItemsAdded() {
+        if (active == null || active.lines().isEmpty()) {
+            throw new IllegalStateException("Cannot proceed: No items have been added to the bill");
+        }
     }
 }

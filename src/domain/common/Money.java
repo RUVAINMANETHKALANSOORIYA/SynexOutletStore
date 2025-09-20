@@ -2,11 +2,15 @@ package domain.common;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
 
 public final class Money implements Comparable<Money> {
     private static final int SCALE = 2;
     private final BigDecimal amount;
     public static final Money ZERO = new Money(BigDecimal.ZERO);
+
+    // Currency formatter for LKR
+    private static final DecimalFormat LKR_FORMAT = new DecimalFormat("#,##0.00");
 
     public Money(BigDecimal amount) { this.amount = amount.setScale(SCALE, RoundingMode.HALF_UP); }
     public static Money of(double v){ return new Money(BigDecimal.valueOf(v)); }
@@ -18,7 +22,19 @@ public final class Money implements Comparable<Money> {
     public Money multiply(double f){ return new Money(amount.multiply(BigDecimal.valueOf(f))); }
     public Money divide(int d){ return new Money(amount.divide(BigDecimal.valueOf(d), SCALE, RoundingMode.HALF_UP)); }
 
-    @Override public String toString(){ return amount.toPlainString(); }
+    public boolean isNegative() { return amount.compareTo(BigDecimal.ZERO) < 0; }
+
+    // Currency formatted output
+    public String toFormattedString() {
+        return "LKR " + LKR_FORMAT.format(amount);
+    }
+
+    // Plain number output (for database storage, etc.)
+    public String toPlainString() {
+        return amount.toPlainString();
+    }
+
+    @Override public String toString(){ return toFormattedString(); } // Default to formatted
     @Override public int compareTo(Money o){ return amount.compareTo(o.amount); }
     @Override public boolean equals(Object o){ return (o instanceof Money m) && amount.compareTo(m.amount)==0; }
     @Override public int hashCode(){ return amount.hashCode(); }

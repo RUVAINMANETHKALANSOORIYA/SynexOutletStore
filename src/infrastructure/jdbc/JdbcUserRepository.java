@@ -2,7 +2,6 @@ package infrastructure.jdbc;
 
 import domain.auth.User;
 import ports.out.UserRepository;
-import infrastructure.jdbc.Db;   // ✅ import your Db helper
 
 import java.sql.*;
 import java.util.Optional;

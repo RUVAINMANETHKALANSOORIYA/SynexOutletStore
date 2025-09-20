@@ -257,8 +257,11 @@ public final class JdbcReportRepository implements ReportRepository {
             FROM items i
             LEFT JOIN batches b ON b.item_code=i.item_code
             GROUP BY i.item_code, i.name, i.restock_level
-            HAVING (shelf_qty + store_qty + main_qty) <= GREATEST(50, restock_level)
-            ORDER BY shelf_qty + store_qty + main_qty ASC, i.item_code
+            HAVING (COALESCE(SUM(b.qty_on_shelf),0) + COALESCE(SUM(b.qty_in_store),0)) <= 
+                   CASE WHEN COALESCE(i.restock_level, 50) > 50 
+                        THEN COALESCE(i.restock_level, 50) 
+                        ELSE 50 END
+            ORDER BY (COALESCE(SUM(b.qty_on_shelf),0) + COALESCE(SUM(b.qty_in_store),0)) ASC, i.item_code
             """;
         List<RestockRow> list = new ArrayList<>();
         try (Connection c = Db.get(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -276,7 +279,7 @@ public final class JdbcReportRepository implements ReportRepository {
             }
             return list;
         } catch (SQLException e) {
-            throw new RuntimeException("restockAtOrBelowLevel failed", e);
+            throw new RuntimeException("restockAtOrBelowLevel failed: " + e.getMessage(), e);
         }
     }
 }

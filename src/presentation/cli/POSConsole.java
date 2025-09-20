@@ -181,7 +181,9 @@ public final class POSConsole {
                 System.out.println("\n--- New " + channel.toUpperCase(Locale.ROOT) + " Bill ---");
                 System.out.println("1. Add Item");
                 System.out.println("2. Remove Item");
-                System.out.println("3. Apply Discount");
+                if (!"ONLINE".equalsIgnoreCase(channel)) {
+                    System.out.println("3. Apply Discount");
+                }
                 System.out.println("4. Show Total");
                 System.out.println("5. Checkout");
                 System.out.println("0. Cancel");
@@ -247,7 +249,13 @@ public final class POSConsole {
                         pos.removeItem(code);
                         System.out.println("✅ Item removed.");
                     }
-                    case "3" -> applyDiscountMenu(sc);
+                    case "3" -> {
+                        if (!"ONLINE".equalsIgnoreCase(channel)) {
+                            applyDiscountMenu(sc);
+                        } else {
+                            System.out.println("Discounts are not available for online purchases.");
+                        }
+                    }
                     case "4" -> {
                         Money t = pos.total();
                         System.out.println("💰 Current Total: " + t);
