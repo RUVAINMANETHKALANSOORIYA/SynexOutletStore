@@ -20,7 +20,7 @@ public final class InventoryService {
         this.selector = selector;
     }
 
-    public void moveMainToStoreFEFOWithUser(String code, int qty) {
+    public void moveMainToStoreFEFOWithUser(String code, int qty, String transferredBy) {
         repo.moveMainToStoreFEFO(code, qty); // Only two arguments allowed
     }
 
