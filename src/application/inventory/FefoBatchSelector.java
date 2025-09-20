@@ -7,7 +7,7 @@ import ports.out.InventoryRepository;   // ✅ Correct import
 import java.util.ArrayList;
 import java.util.List;
 
-/** FEFO: earliest expiry first (null expiry goes last). */
+// First-Expired-First-Out batch selector
 public final class FefoBatchSelector implements BatchSelector {
     @Override
     public List<InventoryReservation> selectFor(String itemCode, int requestedQty, InventoryRepository repo) {

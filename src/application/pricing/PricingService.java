@@ -4,13 +4,7 @@ import domain.billing.Bill;
 import domain.common.Money;
 import domain.pricing.DiscountPolicy;
 
-/**
- * PricingService now applies:
- * - Strategy: DiscountPolicy
- * - Chain of Responsibility: DiscountHandler pipeline (extensible)
- * - Template Method: pricing algorithm skeleton
- * - Decorator: tax (and future fees) as decorators around a base calculator
- */
+
 public final class PricingService {
     private final double taxPercent; // e.g., 15.0 for 15%
 

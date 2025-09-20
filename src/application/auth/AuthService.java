@@ -16,8 +16,7 @@ public final class AuthService {
         String stored = users.loadPasswordHash(username);
         if (stored == null) return false;
 
-        // If stored looks like a SHA-256 hex hash (64 hex chars), compare hashes;
-        // otherwise fall back to plaintext comparison (dev-friendly).
+
         boolean looksHashed = stored.length() == 64 && stored.matches("[0-9a-fA-F]{64}");
         boolean ok = looksHashed
                 ? PasswordHash.sha256(password).equalsIgnoreCase(stored)

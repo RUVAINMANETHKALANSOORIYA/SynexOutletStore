@@ -14,13 +14,13 @@ public final class InventoryService {
     private final InventoryRepository repo;
     private final BatchSelector selector;
 
-    /** Preferred: pass an explicit selector (e.g., new FefoBatchSelector()). */
+    // Dependency Injection of repository and selection strategy
     public InventoryService(InventoryRepository repo, BatchSelector selector) {
         this.repo = repo;
         this.selector = selector;
     }
 
-    public void moveMainToStoreFEFOWithUser(String code, int qty, String transferredBy) {
+    public void moveMainToStoreFEFOWithUser(String code, int qty) {
         repo.moveMainToStoreFEFO(code, qty); // Only two arguments allowed
     }
 
