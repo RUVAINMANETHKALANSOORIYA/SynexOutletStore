@@ -36,7 +36,6 @@ public final class POSController {
     private Bill active = null;
     private DiscountPolicy activeDiscount = null;
 
-    // track reservations by area
     private final List<InventoryReservation> shelfReservations = new ArrayList<>();
     private final List<InventoryReservation> storeReservations = new ArrayList<>();
 
@@ -45,12 +44,10 @@ public final class POSController {
     private String currentUser = "operator";
     private String currentChannel = "POS";
 
-    // Backward-compatible constructor (no events)
     public POSController(InventoryService inv, PricingService pr, BillNumberGenerator gen, BillRepository br, BillWriter bw) {
         this(inv, pr, gen, br, bw, new NoopEventBus());
     }
 
-    // New constructor with EventBus
     public POSController(InventoryService inv, PricingService pr, BillNumberGenerator gen, BillRepository br, BillWriter bw, EventBus events) {
         this.inventory = inv;
         this.pricing = pr;
@@ -81,7 +78,6 @@ public final class POSController {
         paymentReceipt = null;
     }
 
-    /** Legacy addItem (kept). */
     public void addItem(String code, int qty) {
         ensure();
         var res = inventory.reserveByChannel(code, qty, currentChannel);
@@ -94,7 +90,6 @@ public final class POSController {
         active.addLine(line);
     }
 
-    /** Smart add (kept). */
     public InventoryService.SmartPick addItemSmart(String code, int qty,
                                                    boolean approveUseOtherSide,
                                                    boolean managerApprovedBackfill) {
@@ -182,11 +177,9 @@ public final class POSController {
         bills.save(active);
         writer.write(active);
 
-        // Commit by area
         if (!shelfReservations.isEmpty()) inventory.commitReservation(shelfReservations);
         if (!storeReservations.isEmpty()) inventory.commitStoreReservation(storeReservations);
 
-        // ===== Observer: publish bill + stock events =====
         events.publish(new BillPaid(active.number(), active.total(), currentChannel, currentUser));
 
         // dedupe item codes in this bill

@@ -8,10 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import infrastructure.jdbc.Db;
 
-/**
- * Runs db/schema.sql from the classpath to create the database,
- * tables, constraints, and seed data. Execute this once at project start.
- */
+
 public final class SchemaRunner {
     public static void main(String[] args) throws Exception {
         new SchemaRunner().run("db/schema.sql");
@@ -36,7 +33,6 @@ public final class SchemaRunner {
         }
     }
 
-    /** Load and split SQL file on ';' while ignoring '--' comments and blank lines. */
     private static String[] loadSqlStatements(String classpathSql) throws Exception {
         InputStream in = SchemaRunner.class.getClassLoader().getResourceAsStream(classpathSql);
         if (in == null) throw new IllegalArgumentException("SQL resource not found: " + classpathSql);
@@ -50,7 +46,6 @@ public final class SchemaRunner {
                 buf.append(line).append('\n');
             }
         }
-        // naive split is fine for our simple script (no procedures/delimiters)
         return buf.toString().split(";");
     }
 }

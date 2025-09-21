@@ -1,10 +1,6 @@
 package application.inventory;
 
-/**
- * Simple threshold-based policy.
- * - Restock when shelf < threshold.
- * - Move min(storeQty, fixedQty) units per restock operation.
- */
+
 public final class SimpleThresholdReorderPolicy implements ThresholdReorderPolicy {
 
     @Override

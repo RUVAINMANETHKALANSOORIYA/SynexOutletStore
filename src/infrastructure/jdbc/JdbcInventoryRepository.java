@@ -16,7 +16,6 @@ public final class JdbcInventoryRepository implements InventoryRepository {
 
     @Override
     public Optional<Item> findItemByCode(String itemCode) {
-        // Include restock_level if the column exists (your migration adds it).
         String sql = "SELECT id, item_code, name, unit_price, restock_level FROM items WHERE item_code=?";
         try (Connection c = Db.get();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -174,7 +173,6 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ---- Totals (with MAIN) ----
     @Override
     public int shelfQty(String itemCode) {
         String sql = "SELECT COALESCE(SUM(qty_on_shelf),0) FROM batches WHERE item_code=?";
@@ -525,7 +523,6 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         }
     }
 
-    // ===== NEW: Catalog listing/search =====
     @Override
     public List<Item> listAllItems() {
         String sql = "SELECT id, item_code, name, unit_price, restock_level FROM items ORDER BY item_code ASC";

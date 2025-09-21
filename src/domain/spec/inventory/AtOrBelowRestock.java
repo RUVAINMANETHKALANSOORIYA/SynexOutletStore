@@ -2,7 +2,6 @@ package domain.spec.inventory;
 
 import domain.spec.Specification;
 
-/** True when (shelf + store) <= max(50, restockLevel). */
 public final class AtOrBelowRestock implements Specification<StockView> {
     @Override
     public boolean isSatisfiedBy(StockView v) {

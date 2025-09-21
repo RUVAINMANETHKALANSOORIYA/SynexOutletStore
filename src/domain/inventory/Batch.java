@@ -8,7 +8,6 @@ public final class Batch {
     private final LocalDate expiry;
     private int qtyOnShelf, qtyInStore, qtyInMain;
 
-    /** Old 5-arg ctor stays valid (main defaults to 0). */
     public Batch(long id, String itemCode, LocalDate expiry, int qtyOnShelf, int qtyInStore){
         this(id, itemCode, expiry, qtyOnShelf, qtyInStore, 0);
     }

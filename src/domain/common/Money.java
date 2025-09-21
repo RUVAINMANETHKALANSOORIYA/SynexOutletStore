@@ -9,7 +9,6 @@ public final class Money implements Comparable<Money> {
     private final BigDecimal amount;
     public static final Money ZERO = new Money(BigDecimal.ZERO);
 
-    // Currency formatter for LKR
     private static final DecimalFormat LKR_FORMAT = new DecimalFormat("#,##0.00");
 
     public Money(BigDecimal amount) { this.amount = amount.setScale(SCALE, RoundingMode.HALF_UP); }
@@ -24,12 +23,10 @@ public final class Money implements Comparable<Money> {
 
     public boolean isNegative() { return amount.compareTo(BigDecimal.ZERO) < 0; }
 
-    // Currency formatted output
     public String toFormattedString() {
         return "LKR " + LKR_FORMAT.format(amount);
     }
 
-    // Plain number output (for database storage, etc.)
     public String toPlainString() {
         return amount.toPlainString();
     }

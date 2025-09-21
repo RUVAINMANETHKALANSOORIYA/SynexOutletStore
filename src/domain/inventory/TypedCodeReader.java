@@ -2,7 +2,6 @@ package domain.inventory;
 
 import javax.swing.JTextField;
 
-/** Adapter: reads the code from a Swing JTextField. */
 public final class TypedCodeReader implements ItemCodeReader {
     private final JTextField field;
 

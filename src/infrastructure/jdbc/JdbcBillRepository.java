@@ -1,4 +1,4 @@
-package persistence.jdbc;
+package infrastructure.jdbc;
 
 import domain.billing.Bill;
 import domain.billing.BillLine;
@@ -37,7 +37,6 @@ public final class JdbcBillRepository implements BillRepository {
                 pb.setBigDecimal(5, bill.tax().asBigDecimal());
                 pb.setBigDecimal(6, bill.total().asBigDecimal());
 
-                // payment & meta
                 pb.setString(7, bill.paymentMethod());
                 pb.setBigDecimal(8, bill.paidAmount().asBigDecimal());
                 pb.setBigDecimal(9, bill.changeAmount().asBigDecimal());

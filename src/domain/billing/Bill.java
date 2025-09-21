@@ -12,10 +12,8 @@ public final class Bill {
     private final LocalDateTime createdAt = LocalDateTime.now();
     private final List<BillLine> lines = new ArrayList<>();
 
-    // totals
     private Money subtotal = Money.ZERO, discount = Money.ZERO, tax = Money.ZERO, total = Money.ZERO;
 
-    // payment & meta
     private String paymentMethod;          // "CASH" | "CARD" | null (unpaid)
     private Money paidAmount = Money.ZERO; // amount tendered
     private Money changeAmount = Money.ZERO;
@@ -23,16 +21,13 @@ public final class Bill {
     private String channel;                // e.g., "POS", "ONLINE"
     private String userName;               // cashier/operator
 
-    // ====== State pattern ======
     private BillState state = new Draft();
 
     public Bill(String number){ this.number = number; }
 
-    // identity & time
     public String number(){ return number; }
     public LocalDateTime createdAt(){ return createdAt; }
 
-    // lines (state-guarded)
     public List<BillLine> lines(){ return new ArrayList<>(lines); }
 
     public void addLine(BillLine l){ state.onAddLine(this, l); }
@@ -41,7 +36,6 @@ public final class Bill {
     public void removeLineByCode(String code){ state.onRemoveLineByCode(this, code); }
     void removeLineInternal(String code){ lines.removeIf(l -> l.itemCode().equals(code)); }
 
-    // pricing
     public Money computeSubtotal(){
         Money s = Money.ZERO;
         for (var l: lines) s = s.plus(l.lineTotal());
@@ -55,7 +49,6 @@ public final class Bill {
     public Money tax(){ return tax; }
     public Money total(){ return total; }
 
-    // payment (state-guarded)
     public void setPayment(Payment.Receipt r){ state.onSetPayment(this, r); }
     void applyPaymentFields(Payment.Receipt r){
         if (r == null) throw new IllegalArgumentException("Payment receipt required");
@@ -70,13 +63,12 @@ public final class Bill {
     public Money changeAmount(){ return changeAmount; }
     public String cardLast4(){ return cardLast4; }
 
-    // meta
+
     public void setChannel(String channel){ this.channel = channel; }
     public void setUserName(String userName){ this.userName = userName; }
     public String channel(){ return channel; }
     public String userName(){ return userName; }
 
-    // render
     public String renderText(){
         StringBuilder sb = new StringBuilder();
         sb.append("Bill No: ").append(number).append("\n")
@@ -96,7 +88,6 @@ public final class Bill {
                 .append("Tax: ").append(tax).append("\n")
                 .append("Total: ").append(total).append("\n");
 
-        // payment section
         sb.append("Paid via: ").append(paymentMethod == null ? "(unpaid)" : paymentMethod);
         if ("CARD".equals(paymentMethod) && cardLast4 != null) sb.append(" (**** ").append(cardLast4).append(")");
         sb.append("\nPaid: ").append(paidAmount)
@@ -106,7 +97,6 @@ public final class Bill {
         return sb.toString();
     }
 
-    // ====== State types ======
     private interface BillState {
         void onAddLine(Bill b, BillLine l);
         void onRemoveLineByCode(Bill b, String code);

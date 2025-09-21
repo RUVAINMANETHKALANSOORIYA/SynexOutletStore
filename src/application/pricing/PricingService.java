@@ -13,12 +13,10 @@ public final class PricingService {
         this.taxPercent = taxPercent;
     }
 
-    /** Public API unchanged. Internally this delegates to a template + handlers + decorators. */
     public void finalizePricing(Bill bill, DiscountPolicy policy) {
         new StandardPricing().price(bill, policy, this.taxPercent);
     }
 
-    // ===================== Template Method =====================
     private static abstract class PricingTemplate {
         final void price(Bill bill, DiscountPolicy policy, double taxPercent) {
             Money subtotal = computeSubtotal(bill);
@@ -26,7 +24,7 @@ public final class PricingService {
             Money baseAfterDiscount = clampNonNegative(subtotal.minus(discount));
 
             PriceCalculator calc = new BaseCalculator();
-            calc = new TaxDecorator(calc, taxPercent); // you can chain more: new ServiceFeeDecorator(...)
+            calc = new TaxDecorator(calc, taxPercent);
 
             Money tax = calc.extras(baseAfterDiscount);
             Money total = baseAfterDiscount.plus(tax);
@@ -38,17 +36,13 @@ public final class PricingService {
         }
 
         protected Money computeDiscount(Bill bill, Money subtotal, DiscountPolicy policy) {
-            // ================== Chain of Responsibility ==================
             DiscountHandler pipeline = new NoopDiscountHandler();
             if (policy != null) {
                 pipeline = new PolicyHandler(policy, pipeline);
             }
-            // Add more handlers here in future (e.g., membership, coupon):
-            // pipeline = new MembershipHandler(pipeline);
-            // pipeline = new CouponHandler(pipeline);
+
 
             Money dis = pipeline.apply(bill, subtotal);
-            // never exceed subtotal
             if (dis.compareTo(subtotal) > 0) dis = subtotal;
             return clampNonNegative(dis);
         }
@@ -60,18 +54,14 @@ public final class PricingService {
 
     private static final class StandardPricing extends PricingTemplate { }
 
-    // ===================== Chain of Responsibility =====================
     private interface DiscountHandler {
-        /** Return discount amount (>= 0). */
         Money apply(Bill bill, Money subtotal);
     }
 
-    /** Tail handler: no discount. */
     private static final class NoopDiscountHandler implements DiscountHandler {
         @Override public Money apply(Bill bill, Money subtotal) { return Money.ZERO; }
     }
 
-    /** Adapts a DiscountPolicy into the chain. */
     private static final class PolicyHandler implements DiscountHandler {
         private final DiscountPolicy policy;
         private final DiscountHandler next;
@@ -87,9 +77,7 @@ public final class PricingService {
     }
 
     // ===================== Decorator =====================
-    /** Calculates extra charges (e.g., tax/fees) on a base amount (post-discount). */
     private interface PriceCalculator {
-        /** Return extra charges only (not total). */
         Money extras(Money baseAfterDiscount);
     }
 

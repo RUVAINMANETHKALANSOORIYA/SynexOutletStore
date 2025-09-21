@@ -110,7 +110,6 @@ public final class JdbcReportRepository implements ReportRepository {
         }
     }
 
-    // ===== NEW =====
 
     @Override
     public List<ReshelvingRow> reshelvingSuggestions(int shelfTarget) {

@@ -35,7 +35,6 @@ public final class ConsoleReportPrinter implements ReportPrinter {
         System.out.println();
     }
 
-    // ===== New Reports =====
 
     @Override
     public void printReshelving(List<ReshelvingRow> rows, int shelfTarget) {

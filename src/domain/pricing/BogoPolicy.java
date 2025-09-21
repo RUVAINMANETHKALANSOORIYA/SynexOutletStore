@@ -7,8 +7,7 @@ import domain.common.Money;
 public final class BogoPolicy implements DiscountPolicy {
     @Override
     public Money computeDiscount(Bill bill) {
-        // For each line: Buy-One-Get-One-Free → free items = floor(qty/2)
-        // discount = free_count * unit_price
+
         Money d = Money.ZERO;
         for (BillLine l : bill.lines()) {
             int free = l.quantity() / 2;

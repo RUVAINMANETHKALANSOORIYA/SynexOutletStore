@@ -12,7 +12,6 @@ public final class ReportingService {
         this.printer = printer;
     }
 
-    // ----- Daily Sales -----
     public void printDailySales(LocalDate day) {
         var row = repo.dailySales(day);
         var view = new ReportPrinter.DailySales(
@@ -25,7 +24,6 @@ public final class ReportingService {
         printer.printDailySales(view);
     }
 
-    // ----- Reshelving Report -----
     public void printReshelving(int shelfTarget) {
         var rows = repo.reshelvingSuggestions(shelfTarget);
         List<ReportPrinter.ReshelvingRow> view = rows.stream()
@@ -40,7 +38,6 @@ public final class ReportingService {
         printer.printReshelving(view, shelfTarget);
     }
 
-    // ----- Reorder Report -----
     public void printReorder(int threshold) {
         var rows = repo.reorderBelow(threshold);
         List<ReportPrinter.ReorderRow> view = rows.stream()
@@ -53,11 +50,7 @@ public final class ReportingService {
         printer.printReorder(view, threshold);
     }
 
-    /**
-     * Restock Report:
-     * Your repo.restockAtOrBelowLevel() should implement the rule:
-     *   show item when (shelf_qty + store_qty) <= max(50, restock_level)
-     */
+
     public void printRestock() {
         var rows = repo.restockAtOrBelowLevel();
         var view = rows.stream()
@@ -73,14 +66,11 @@ public final class ReportingService {
         printer.printRestock(view);
     }
 
-    /**
-     * Return raw restock data for POSConsole to format itself
-     */
+
     public List<ReportRepository.RestockRow> restockAtOrBelowLevel() {
         return repo.restockAtOrBelowLevel();
     }
 
-    // ----- Stock Report -----
     public void printStockByBatch(String itemCodeOrNull) {
         var rows = repo.stockByBatch(itemCodeOrNull);
         List<ReportPrinter.StockBatchRow> view = rows.stream()
@@ -96,7 +86,6 @@ public final class ReportingService {
         printer.printStock(view, itemCodeOrNull);
     }
 
-    // ----- Bill Report -----
     public void printBills(LocalDate from, LocalDate to) {
         var rows = repo.billsBetween(from, to);
         List<ReportPrinter.BillRow> view = rows.stream()
@@ -115,7 +104,6 @@ public final class ReportingService {
         printer.printBills(view, from, to);
     }
 
-    // ----- Best Sellers -----
     public void printBestSellers(LocalDate from, LocalDate to, int limit) {
         var rows = repo.bestSellers(from, to, limit);
         var list = rows.stream()
@@ -129,7 +117,6 @@ public final class ReportingService {
         printer.printBestSellers(from, to, list);
     }
 
-    // ----- Revenue Series -----
     public void printRevenueSeries(LocalDate from, LocalDate to) {
         var rows = repo.revenueByDay(from, to);
         List<ReportPrinter.RevenuePoint> series = rows.stream()

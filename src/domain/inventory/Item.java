@@ -8,7 +8,6 @@ public final class Item {
     private final Money unitPrice;
     private final int restockLevel;
 
-    /** Old constructor stays valid (defaults restock level to 50). */
     public Item(long id, String code, String name, Money unitPrice) {
         this(id, code, name, unitPrice, 50);
     }

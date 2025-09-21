@@ -36,23 +36,18 @@ public final class InventoryService {
                 .name();
     }
 
-    /** Expose unit price (used by UI/Controller). */
     public Money priceOf(String code) { return repo.priceOf(code); }
 
-    /** Reserve from shelf (ONLINE primary source). */
     public List<InventoryReservation> reserveFromShelfFEFO(String code, int qty) {
         return selector.selectFor(code, qty, repo);
     }
 
-    /** Reserve from store/backroom (POS primary source). */
     public List<InventoryReservation> reserveFromStoreFEFO(String code, int qty) {
         return selectForStore(code, qty);
     }
 
-    /** Commit reservations that were taken from shelf. */
     public void commitReservation(List<InventoryReservation> r) { repo.commitReservations(r); }
 
-    /** Commit reservations that were taken from store. */
     public void commitStoreReservation(List<InventoryReservation> r) { repo.commitStoreReservations(r); }
 
     // -------- Channel-aware helpers (legacy behavior) --------
@@ -72,9 +67,7 @@ public final class InventoryService {
         }
     }
 
-    // ----------------------------------------------------------------
-    // NEW: Smart inventory (primary -> optional secondary -> main backfill)
-    // ----------------------------------------------------------------
+
 
     public int shelfQty(String code) { return repo.shelfQty(code); }
     public int storeQty(String code) { return repo.storeQty(code); }
@@ -86,15 +79,25 @@ public final class InventoryService {
     public void moveMainToStoreFEFO(String code, int qty) { repo.moveMainToStoreFEFO(code, qty); }
 
     /**
-     * Smart plan for a line item:
-     *  - POS  primary = STORE, secondary = SHELF
-     *  - ONLINE primary = SHELF, secondary = STORE
-     *  - If primary insufficient and approveUseOtherSide==true, pull remainder from secondary (FEFO).
-     *  - If secondary still insufficient, with managerApprovedBackfill==true, move MAIN -> secondary to fulfill.
-     *  - After using secondary, if secondary would fall <= restock level, and managerApprovedBackfill==true,
-     *    top up secondary from MAIN back to restock level.
-     *  - Flag “out of stock” if the customer buys exactly the restock level that existed on the primary side.
+     * Smart reservation plan:
+     *  - Try to reserve fully from primary (Shelf for Web, Store for POS)
+     *  - If insufficient in primary, and approveUseOtherSide=true, reserve remainder from secondary
+     *  - If insufficient in secondary, and managerApprovedBackfill=true, move from MAIN to secondary to fulfill
+     *  - After fulfilling, if secondary is at/below restock level, and managerApprovedBackfill=true, backfill secondary to restock level from MAIN
+     *  - If any MAIN->secondary moves were done, the caller should inform the user (sensitive operation)
+     *  - If the sale causes primary to go to zero and it was exactly at restock level before, inform the user "Item is now out of stock."
+     *
+     * @param code                     item code
+     * @param requestedQty             quantity requested (>0)
+     * @param channel                  "POS" or "WEB" (case-insensitive)
+     * @param approveUseOtherSide      if true, allows using secondary stock if primary is insufficient
+     * @param managerApprovedBackfill  if true, allows pulling from MAIN to fulfill or backfill
+     * @return SmartPick result with reservations and flags
+     * @throws IllegalArgumentException if requestedQty <= 0
+     * @throws NoSuchElementException   if item code is unknown
+     * @throws IllegalStateException    if insufficient stock and approvals not given
      */
+
     public SmartPick reserveSmart(String code, int requestedQty, String channel,
                                   boolean approveUseOtherSide, boolean managerApprovedBackfill) {
         if (requestedQty <= 0) throw new IllegalArgumentException("qty must be > 0");
@@ -127,7 +130,6 @@ public final class InventoryService {
             if (!approveUseOtherSide)
                 throw new IllegalStateException("Not enough in primary. Approval to use secondary stock is required.");
 
-            // how much secondary already has
             int secUseFromExisting = Math.min(remaining, secondaryBefore);
             int needBeyondSecondary = remaining - secUseFromExisting;
 
@@ -139,7 +141,6 @@ public final class InventoryService {
                 if (canTopUpFromMain <= 0)
                     throw new IllegalStateException("Insufficient quantity in MAIN to fulfill.");
 
-                // Move MAIN -> secondary to be able to fulfill the remainder
                 if (pos) moveMainToShelfFEFO(code, canTopUpFromMain);
                 else     moveMainToStoreFEFO(code, canTopUpFromMain);
 
@@ -147,14 +148,11 @@ public final class InventoryService {
                 secondaryBefore += canTopUpFromMain; // logical snapshot
             }
 
-            // Now reserve the remainder from secondary
             if (pos) shelfRes.addAll(reserveFromShelfFEFO(code, remaining));
             else     storeRes.addAll(reserveFromStoreFEFO(code, remaining));
 
-            // After this sale, simulate secondary remaining
             int secondaryAfter = secondaryBefore - remaining;
 
-            // If secondary falls to/below restock level, optionally backfill to restock level
             if (secondaryAfter <= restock && managerApprovedBackfill) {
                 int needToRestockToLevel = restock - secondaryAfter;
                 int canTopUp = Math.min(Math.max(0, needToRestockToLevel), mainBefore);
@@ -166,7 +164,6 @@ public final class InventoryService {
             }
         }
 
-        // Flag: “Item is now out of stock.” when the customer buys exactly the restock level that existed on the primary side.
         boolean itemNowOutOfStockMsg =
                 (primaryTake == primaryBefore) && (primaryBefore == restock);
 
@@ -180,7 +177,6 @@ public final class InventoryService {
         );
     }
 
-    /** Result DTO for the smart plan (split reservations + flags). */
     public static final class SmartPick {
         public final List<InventoryReservation> shelfReservations; // to commit with repo.commitReservations()
         public final List<InventoryReservation> storeReservations; // to commit with repo.commitStoreReservations()
@@ -204,7 +200,6 @@ public final class InventoryService {
         }
     }
 
-    // ===== NEW: Catalog helpers for UI =====
     public List<Item> listAllItems() {
         return repo.listAllItems();
     }

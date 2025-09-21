@@ -6,15 +6,7 @@ import java.sql.SQLException;
 import java.util.Properties;
 import java.io.InputStream;
 
-/**
- * Centralized DB connection provider.
- * Loads settings from resources/db.properties.
- *
- * Expected properties:
- *   db.url=jdbc:mysql://localhost:3306/posdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
- *   db.user=root
- *   db.password=
- */
+
 public final class Db {
     private static final String url;
     private static final String user;

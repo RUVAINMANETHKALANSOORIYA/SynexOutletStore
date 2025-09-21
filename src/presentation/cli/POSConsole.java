@@ -1,4 +1,3 @@
-// ... same imports ...
 package presentation.cli;
 
 import application.auth.AuthService;
@@ -43,7 +42,6 @@ public final class POSConsole {
         this.inv = inv;
     }
 
-    // ========= ONLINE-ONLY app (no staff login) =========
     public void runOnlineApp() {
         Scanner sc = new Scanner(System.in);
         sc.useLocale(Locale.US);
@@ -115,7 +113,6 @@ public final class POSConsole {
         }
     }
 
-    // ========= Store app (staff login) =========
     public void run() {
         Scanner sc = new Scanner(System.in);
         sc.useLocale(Locale.US);
@@ -170,7 +167,6 @@ public final class POSConsole {
         }
     }
 
-    // ================== BILL MENU ==================
     private void billMenu(Scanner sc, String channel) {
         try {
             pos.setChannel(channel);
@@ -211,11 +207,9 @@ public final class POSConsole {
                         System.out.print("Enter Quantity: ");
                         int qty = readInt(sc);
 
-                        // ---- Try to add; if shortfall, offer MAIN transfer (interactive) ----
                         boolean added = tryAddWithMainTopUpInteractive(sc, channel, code, qty);
                         if (!added) break; // user cancelled or still insufficient
 
-                        // Restock level notice
                         try {
                             int restock = inv.restockLevel(code);
                             int remaining = inv.shelfQty(code) + inv.storeQty(code);
@@ -224,7 +218,6 @@ public final class POSConsole {
                             }
                         } catch (Exception ignored) { }
 
-                        // Auto top-up when *primary* becomes empty (kept behavior)
                         try {
                             if ("POS".equalsIgnoreCase(channel)) {
                                 int storeLeft = inv.storeQty(code);
@@ -285,7 +278,6 @@ public final class POSConsole {
         }
     }
 
-    // ===== NEW: Try to add; if shortfall, show store/main and offer FEFO MAIN transfer =====
     private boolean tryAddWithMainTopUpInteractive(Scanner sc, String channel, String code, int qty) {
         try {
             pos.addItem(code, qty);
@@ -338,7 +330,6 @@ public final class POSConsole {
         }
     }
 
-    // ===== Helpers =====
     private void printStoreMainSnapshot(String code, int inStore, int inMain) {
         System.out.println("========================================");
         System.out.println("Item: " + code);
@@ -376,7 +367,6 @@ public final class POSConsole {
         try { return c.call(); } catch (Exception e) { return def; }
     }
 
-    // ===== existing item picker, reports, manager, etc. (unchanged) =====
 
     private String promptItemCode(Scanner sc) {
         while (true) {
@@ -469,9 +459,8 @@ public final class POSConsole {
     private void checkoutMenu(Scanner sc) {
         try {
             Money due = pos.total();
-            System.out.println("Amount due: " + due);
+            System.out.println("Amount due: " + due + " LKR");
             System.out.println("1. Pay by Cash");
-            System.out.println("2. Pay by Card");
             System.out.println("0. Cancel");
             System.out.print("Choose: ");
             String pay = readLine(sc);
@@ -481,19 +470,13 @@ public final class POSConsole {
                     System.out.print("Cash received: ");
                     double amt = readDouble(sc);
                     pos.checkoutCash(amt);
-                    System.out.println(" Checkout complete (Cash).");
-                }
-                case "2" -> {
-                    System.out.print("Card last 4 digits: ");
-                    String last4 = readLine(sc);
-                    pos.checkoutCard(last4);
-                    System.out.println(" Checkout complete (Card ****" + last4 + ").");
+                    System.out.println("✅ Checkout complete (Cash).");
                 }
                 case "0" -> System.out.println("Cancelled.");
                 default -> System.out.println("Invalid choice.");
             }
         } catch (Exception ex) {
-            System.out.println(" Error: " + ex.getMessage());
+            System.out.println("⚠️ Error: " + ex.getMessage());
         }
     }
 
@@ -748,7 +731,6 @@ public final class POSConsole {
         }
     }
 
-    // -------- input helpers --------
     private static String readLine(Scanner sc) {
         String s = sc.nextLine();
         while (s != null && s.isEmpty() && sc.hasNextLine()) {

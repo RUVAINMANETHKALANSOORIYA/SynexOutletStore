@@ -9,11 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Proxy that enforces role checks for MAIN->(Shelf/Store) transfers.
- * Wrap the real JdbcInventoryRepository in your bootstrap:
- *   var secured = new PermissionCheckedInventoryRepository(realRepo, authService);
- */
+
 public final class PermissionCheckedInventoryRepository implements InventoryRepository {
     private final InventoryRepository inner;
     private final AuthService auth;
@@ -29,7 +25,6 @@ public final class PermissionCheckedInventoryRepository implements InventoryRepo
         if (!ok) throw new SecurityException("Manager/Admin required for MAIN transfers.");
     }
 
-    // ==== guarded ====
     @Override public void moveMainToShelfFEFO(String itemCode, int qty) {
         requireManagerOrAdmin();
         inner.moveMainToShelfFEFO(itemCode, qty);
@@ -39,7 +34,6 @@ public final class PermissionCheckedInventoryRepository implements InventoryRepo
         inner.moveMainToStoreFEFO(itemCode, qty);
     }
 
-    // ==== plain delegation ====
     @Override public Optional<Item> findItemByCode(String itemCode) { return inner.findItemByCode(itemCode); }
     @Override public Money priceOf(String itemCode) { return inner.priceOf(itemCode); }
     @Override public List<Batch> findBatchesOnShelf(String itemCode) { return inner.findBatchesOnShelf(itemCode); }
