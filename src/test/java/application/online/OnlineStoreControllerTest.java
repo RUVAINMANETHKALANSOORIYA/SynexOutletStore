@@ -10,6 +10,7 @@ import domain.billing.BillNumberGenerator;
 import domain.billing.BillWriter;
 import domain.common.Money;
 import domain.inventory.Batch;
+import domain.inventory.BatchDiscount;
 import domain.inventory.InventoryReservation;
 import domain.inventory.Item;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,13 +41,13 @@ class OnlineStoreControllerTest {
     @BeforeEach
     void setup() {
         invRepo = new FakeInventoryRepo();
-        inv = new InventoryService(invRepo);
-        pricing = new PricingService(0.0); // simplify calculations
+        inv = new InventoryService(invRepo, new application.inventory.FefoBatchSelector()); // Use non-deprecated constructor
+        pricing = new PricingService(0.0, inv); // Updated to include inventory service
         billNos = new FakeBillNoGen();
         repo = new FakeBillRepo();
         writer = new FakeBillWriter();
         events = new CapturingEvents();
-        pos = new POSController(inv, pricing, billNos, repo, writer, events);
+        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
         pos.setChannel("ONLINE");
         pos.newBill();
     }
@@ -176,6 +177,13 @@ class OnlineStoreControllerTest {
         @Override public void editBatchQuantities(long batchId, int qtyShelf, int qtyStore) { /* unused */ }
         @Override public void updateBatchExpiry(long batchId, LocalDate newExpiry) { /* unused */ }
         @Override public void deleteBatch(long batchId) { /* unused */ }
+
+        // Added missing batch discount methods
+        @Override public void addBatchDiscount(long batchId, BatchDiscount.DiscountType type, Money value, String reason, String createdBy) { /* unused */ }
+        @Override public void removeBatchDiscount(long discountId) { /* unused */ }
+        @Override public Optional<BatchDiscount> findActiveBatchDiscount(long batchId) { return Optional.empty(); }
+        @Override public List<BatchDiscount> findBatchDiscountsByBatch(long batchId) { return List.of(); }
+        @Override public List<BatchDiscountView> getAllBatchDiscountsWithDetails() { return List.of(); }
     }
 
     static final class FakeBillNoGen implements BillNumberGenerator {

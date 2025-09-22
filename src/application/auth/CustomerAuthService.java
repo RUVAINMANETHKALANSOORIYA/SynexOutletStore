@@ -15,6 +15,14 @@ public final class CustomerAuthService {
     }
 
     public boolean register(String username, String password, String email) {
+        // Validate username - no numbers allowed
+        if (username == null || username.trim().isEmpty()) {
+            return false;
+        }
+        if (containsNumbers(username)) {
+            throw new IllegalArgumentException("Invalid login credentials. You can't add numbers to login.");
+        }
+
         if (repo.findByUsername(username).isPresent()) {
             return false; // username taken
         }
@@ -24,6 +32,14 @@ public final class CustomerAuthService {
     }
 
     public boolean login(String username, String password) {
+        // Validate username - no numbers allowed
+        if (username == null || username.trim().isEmpty()) {
+            return false;
+        }
+        if (containsNumbers(username)) {
+            throw new IllegalArgumentException("Invalid login credentials. You can't add numbers to login.");
+        }
+
         String stored = repo.loadPasswordHash(username);
         if (stored == null) return false;
         String given = PasswordHash.sha256(password);
@@ -36,4 +52,8 @@ public final class CustomerAuthService {
     public void logout() { current = null; }
     public boolean isLoggedIn() { return current != null; }
     public Customer currentUser() { return current; }
+
+    private boolean containsNumbers(String text) {
+        return text.matches(".*\\d.*");
+    }
 }

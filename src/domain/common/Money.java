@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 
+
 public final class Money implements Comparable<Money> {
     private static final int SCALE = 2;
     private final BigDecimal amount;

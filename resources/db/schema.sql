@@ -33,6 +33,24 @@ CREATE TABLE IF NOT EXISTS batches (
     INDEX idx_batches_expiry (expiry)
 ) ENGINE=InnoDB;
 
+-- Batch-specific discounts (NEW)
+CREATE TABLE IF NOT EXISTS batch_discounts (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    batch_id        BIGINT NOT NULL,
+    discount_type   VARCHAR(20) NOT NULL, -- 'PERCENTAGE', 'FIXED_AMOUNT'
+    discount_value  DECIMAL(10,2) NOT NULL, -- percentage (0-100) or fixed amount
+    reason          VARCHAR(200), -- e.g., 'Close to expiry', 'Overstock'
+    valid_from      DATETIME NOT NULL,
+    valid_until     DATETIME, -- NULL = no expiry
+    created_by      VARCHAR(64) NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE,
+    INDEX idx_batch_discounts_batch (batch_id),
+    INDEX idx_batch_discounts_active (is_active),
+    INDEX idx_batch_discounts_validity (valid_from, valid_until)
+) ENGINE=InnoDB;
+
 -- Bills + lines (your persistence + reporting)
 CREATE TABLE IF NOT EXISTS bills (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,

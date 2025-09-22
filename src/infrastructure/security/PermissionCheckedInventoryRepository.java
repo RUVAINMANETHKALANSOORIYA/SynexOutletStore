@@ -56,4 +56,28 @@ public final class PermissionCheckedInventoryRepository implements InventoryRepo
     @Override public void setItemRestockLevel(String itemCode, int level) { inner.setItemRestockLevel(itemCode, level); }
     @Override public List<Item> listAllItems() { return inner.listAllItems(); }
     @Override public List<Item> searchItemsByNameOrCode(String query) { return inner.searchItemsByNameOrCode(query); }
+
+    // ===== Batch discount management (with permission checks) =====
+    @Override public void addBatchDiscount(long batchId, BatchDiscount.DiscountType type, Money value,
+                                          String reason, String createdBy) {
+        requireManagerOrAdmin();
+        inner.addBatchDiscount(batchId, type, value, reason, createdBy);
+    }
+
+    @Override public void removeBatchDiscount(long discountId) {
+        requireManagerOrAdmin();
+        inner.removeBatchDiscount(discountId);
+    }
+
+    @Override public Optional<BatchDiscount> findActiveBatchDiscount(long batchId) {
+        return inner.findActiveBatchDiscount(batchId);
+    }
+
+    @Override public List<BatchDiscount> findBatchDiscountsByBatch(long batchId) {
+        return inner.findBatchDiscountsByBatch(batchId);
+    }
+
+    @Override public List<BatchDiscountView> getAllBatchDiscountsWithDetails() {
+        return inner.getAllBatchDiscountsWithDetails();
+    }
 }

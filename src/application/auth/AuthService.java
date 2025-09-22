@@ -13,6 +13,14 @@ public final class AuthService {
     public AuthService(UserRepository users) { this.users = users; }
 
     public boolean login(String username, String password) {
+        // Validate username - no numbers allowed
+        if (username == null || username.trim().isEmpty()) {
+            return false;
+        }
+        if (containsNumbers(username)) {
+            throw new IllegalArgumentException("Invalid login credentials. You can't add numbers to login.");
+        }
+
         String stored = users.loadPasswordHash(username);
         if (stored == null) return false;
 
@@ -32,4 +40,8 @@ public final class AuthService {
     public void logout() { current = null; }
     public boolean isLoggedIn() { return current != null; }
     public User currentUser() { return current; }
+
+    private boolean containsNumbers(String text) {
+        return text.matches(".*\\d.*");
+    }
 }

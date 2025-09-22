@@ -9,6 +9,7 @@ import domain.billing.BillNumberGenerator;
 import domain.billing.BillWriter;
 import domain.common.Money;
 import domain.inventory.Batch;
+import domain.inventory.BatchDiscount;
 import domain.inventory.InventoryReservation;
 import domain.inventory.Item;
 import domain.pricing.DiscountPolicy;
@@ -37,13 +38,13 @@ class POSControllerTest {
     @BeforeEach
     void setup() {
         invRepo = new FakeInventoryRepo();
-        inv = new InventoryService(invRepo);
-        pricing = new PricingService(0.0); // simplify
+        inv = new InventoryService(invRepo, new application.inventory.FefoBatchSelector()); // Use non-deprecated constructor
+        pricing = new PricingService(0.0, inv); // Updated to include inventory service
         billNos = new FakeBillNoGen();
         repo = new FakeBillRepo();
         writer = new FakeBillWriter();
         events = new CapturingEvents();
-        pos = new POSController(inv, pricing, billNos, repo, writer, events);
+        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
         pos.newBill();
     }
 
@@ -125,7 +126,7 @@ class POSControllerTest {
     @Test
     @DisplayName("total throws if no items added")
     void total_throws_if_no_items() {
-        pos = new POSController(inv, pricing, billNos, repo, writer, events);
+        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
         pos.newBill();
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> pos.total());
         assertTrue(ex.getMessage().toLowerCase().contains("no items"));
@@ -212,7 +213,7 @@ class POSControllerTest {
     @Test
     @DisplayName("guard: operations throw when no active bill")
     void guard_no_active_bill() {
-        pos = new POSController(inv, pricing, billNos, repo, writer, events);
+        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
         assertThrows(IllegalStateException.class, () -> pos.addItem("A", 1));
         assertThrows(IllegalStateException.class, () -> pos.addItemSmart("A", 1, false, false));
         assertThrows(IllegalStateException.class, () -> pos.removeItem("A"));
@@ -308,6 +309,13 @@ class POSControllerTest {
         @Override public void editBatchQuantities(long batchId, int qtyShelf, int qtyStore) { /* unused */ }
         @Override public void updateBatchExpiry(long batchId, LocalDate newExpiry) { /* unused */ }
         @Override public void deleteBatch(long batchId) { /* unused */ }
+
+        // Added missing batch discount methods
+        @Override public void addBatchDiscount(long batchId, BatchDiscount.DiscountType type, Money value, String reason, String createdBy) { /* unused */ }
+        @Override public void removeBatchDiscount(long discountId) { /* unused */ }
+        @Override public Optional<BatchDiscount> findActiveBatchDiscount(long batchId) { return Optional.empty(); }
+        @Override public List<BatchDiscount> findBatchDiscountsByBatch(long batchId) { return List.of(); }
+        @Override public List<BatchDiscountView> getAllBatchDiscountsWithDetails() { return List.of(); }
     }
 
     static final class FakeBillNoGen implements BillNumberGenerator {

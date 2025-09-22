@@ -44,7 +44,7 @@ public class Main {
         var selector  = new FefoBatchSelector();
         var inventory = new InventoryService(invRepo, selector);
 
-        var pricing   = new PricingService(0.0); // tax % configurable
+        var pricing   = new PricingService(0.0, inventory); // tax % configurable, now with inventory service
         BillRepository billRepo      = new JdbcBillRepository();
         BillNumberGenerator billNos  = new JdbcBillNumberGenerator();
         var writer    = new TxtBillWriter(Path.of("bills"));
@@ -58,14 +58,15 @@ public class Main {
         bus.subscribe(StockDepleted.class, e ->
                 System.out.println("[EVENT] StockDepleted item=" + e.itemCode()));
 
-        var pos       = new POSController(inventory, pricing, billNos, billRepo, writer, bus);
+        var restock   = new RestockService(invRepo);
+        var admin     = new InventoryAdminService(invRepo);
+
+        // Update POSController to include InventoryAdminService for batch discount functionality
+        var pos       = new POSController(inventory, admin, pricing, billNos, billRepo, writer, bus);
 
         ReportRepository reportRepo = new JdbcReportRepository();
         ReportPrinter printer       = new ConsoleReportPrinter();
         var reports   = new ReportingService(reportRepo, printer);
-
-        var restock   = new RestockService(invRepo);
-        var admin     = new InventoryAdminService(invRepo);
 
         CustomerRepository custRepo = new JdbcCustomerRepository();
         var customerAuth            = new CustomerAuthService(custRepo);

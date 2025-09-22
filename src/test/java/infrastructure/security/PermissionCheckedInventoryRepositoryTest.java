@@ -4,6 +4,7 @@ import application.auth.AuthService;
 import domain.auth.User;
 import domain.common.Money;
 import domain.inventory.Batch;
+import domain.inventory.BatchDiscount;
 import domain.inventory.InventoryReservation;
 import domain.inventory.Item;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,6 +114,13 @@ class PermissionCheckedInventoryRepositoryTest {
         @Override public void editBatchQuantities(long batchId, int qtyShelf, int qtyStore) {}
         @Override public void updateBatchExpiry(long batchId, LocalDate newExpiry) {}
         @Override public void deleteBatch(long batchId) {}
+
+        // Added missing batch discount methods
+        @Override public void addBatchDiscount(long batchId, BatchDiscount.DiscountType type, Money value, String reason, String createdBy) {}
+        @Override public void removeBatchDiscount(long discountId) {}
+        @Override public Optional<BatchDiscount> findActiveBatchDiscount(long batchId) { return Optional.empty(); }
+        @Override public List<BatchDiscount> findBatchDiscountsByBatch(long batchId) { return List.of(); }
+        @Override public List<BatchDiscountView> getAllBatchDiscountsWithDetails() { return List.of(); }
     }
 
     static final class InMemoryUserRepo implements UserRepository {

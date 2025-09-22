@@ -63,12 +63,16 @@ public final class POSConsole {
                         String u = readLine(sc);
                         System.out.print("Password: ");
                         String p = readLine(sc);
-                        if (customerAuth.login(u, p)) {
-                            System.out.println(" Customer login successful. Welcome " + u + "!");
-                            customerLoggedIn = true;
-                            currentCustomer = u;
-                        } else {
-                            System.out.println(" Login failed.");
+                        try {
+                            if (customerAuth.login(u, p)) {
+                                System.out.println("✅ Customer login successful. Welcome " + u + "!");
+                                customerLoggedIn = true;
+                                currentCustomer = u;
+                            } else {
+                                System.out.println("❌ Login failed.");
+                            }
+                        } catch (IllegalArgumentException e) {
+                            System.out.println("❌ " + e.getMessage());
                         }
                     }
                     case "2" -> {
@@ -78,10 +82,14 @@ public final class POSConsole {
                         String p = readLine(sc);
                         System.out.print("Email: ");
                         String e = readLine(sc);
-                        if (customerAuth.register(u, p, e)) {
-                            System.out.println(" Registration successful. You can now log in.");
-                        } else {
-                            System.out.println(" Username already taken.");
+                        try {
+                            if (customerAuth.register(u, p, e)) {
+                                System.out.println("✅ Registration successful. You can now log in.");
+                            } else {
+                                System.out.println("❌ Username already taken.");
+                            }
+                        } catch (IllegalArgumentException ex) {
+                            System.out.println("❌ " + ex.getMessage());
                         }
                     }
                     case "0" -> { return; }
@@ -99,7 +107,7 @@ public final class POSConsole {
             switch (pick) {
                 case "1" -> {
                     pos.setChannel("ONLINE");
-                    // pos.setUser(currentCustomer); // optional: stamp customer on bill
+                    pos.setUser(currentCustomer); // Set the logged-in customer username for online orders
                     billMenu(sc, "ONLINE");
                 }
                 case "2" -> {
@@ -126,12 +134,16 @@ public final class POSConsole {
             String user = sc.nextLine().trim();
             System.out.print("Password: ");
             String pass = sc.nextLine().trim();
-            if (auth.login(user, pass)) {
-                pos.setUser(user);
-                pos.setChannel("POS");
-                System.out.println(" Login successful! Welcome, " + user + ".");
-            } else {
-                System.out.println(" Login failed. Please try again.\n");
+            try {
+                if (auth.login(user, pass)) {
+                    pos.setUser(user);
+                    pos.setChannel("POS");
+                    System.out.println("✅ Login successful! Welcome, " + user + ".");
+                } else {
+                    System.out.println("❌ Login failed. Please try again.\n");
+                }
+            } catch (IllegalArgumentException e) {
+                System.out.println("❌ " + e.getMessage());
             }
         }
 
@@ -170,6 +182,10 @@ public final class POSConsole {
     private void billMenu(Scanner sc, String channel) {
         try {
             pos.setChannel(channel);
+            // For online orders, ensure customer username is set properly
+            if ("ONLINE".equalsIgnoreCase(channel) && customerAuth.isLoggedIn()) {
+                pos.setUser(customerAuth.currentUser().name());
+            }
             pos.newBill();
             boolean active = true;
 
@@ -177,11 +193,9 @@ public final class POSConsole {
                 System.out.println("\n--- New " + channel.toUpperCase(Locale.ROOT) + " Bill ---");
                 System.out.println("1. Add Item");
                 System.out.println("2. Remove Item");
-                if (!"ONLINE".equalsIgnoreCase(channel)) {
-                    System.out.println("3. Apply Discount");
-                }
-                System.out.println("4. Show Total");
-                System.out.println("5. Checkout");
+                // Removed manual discount option - only inventory managers can apply discounts through batch management
+                System.out.println("3. Show Total");
+                System.out.println("4. Checkout");
                 System.out.println("0. Cancel");
                 System.out.print("Choose an option: ");
                 String choice = readLine(sc);
@@ -193,19 +207,35 @@ public final class POSConsole {
                             System.out.println("Cancelled.");
                             break;
                         }
+
+                        // Enhanced validation: Check if item exists in catalog
                         Money price;
                         String name;
                         try {
+                            // First validate the item exists in the catalog
+                            if (!isValidItemCode(code)) {
+                                System.out.println("❌ You can't add item which is not in the item list. Please check the code: " + code);
+                                System.out.println("💡 Type '?' to browse available items or search by name.");
+                                break;
+                            }
+
                             name = inv.itemName(code);
                             price = inv.priceOf(code);
                         } catch (Exception e) {
-                            System.out.println("Unknown item code. Try again.");
+                            System.out.println("❌ You can't add item which is not in the item list. Please check the code: " + code);
+                            System.out.println("💡 Type '?' to browse available items or search by name.");
                             break;
                         }
-                        System.out.println("Selected: " + code + "  |  " + name + "  |  Unit: " + price);
+
+                        System.out.println("Selected: " + code + "  |  " + name + "  |  Unit: " + price + " LKR");
 
                         System.out.print("Enter Quantity: ");
                         int qty = readInt(sc);
+
+                        if (qty <= 0) {
+                            System.out.println("❌ Quantity must be greater than 0.");
+                            break;
+                        }
 
                         boolean added = tryAddWithMainTopUpInteractive(sc, channel, code, qty);
                         if (!added) break; // user cancelled or still insufficient
@@ -243,17 +273,10 @@ public final class POSConsole {
                         System.out.println("✅ Item removed.");
                     }
                     case "3" -> {
-                        if (!"ONLINE".equalsIgnoreCase(channel)) {
-                            applyDiscountMenu(sc);
-                        } else {
-                            System.out.println("Discounts are not available for online purchases.");
-                        }
-                    }
-                    case "4" -> {
                         Money t = pos.total();
                         System.out.println("💰 Current Total: " + t);
                     }
-                    case "5" -> {
+                    case "4" -> {
                         if ("ONLINE".equalsIgnoreCase(channel)) {
                             Money due = pos.total();
                             System.out.println("Amount due: " + due);
@@ -367,6 +390,21 @@ public final class POSConsole {
         try { return c.call(); } catch (Exception e) { return def; }
     }
 
+    // Helper method to validate if item code exists in catalog
+    private boolean isValidItemCode(String code) {
+        if (code == null || code.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            // Try to get item details - if it throws exception, item doesn't exist
+            inv.itemName(code);
+            inv.priceOf(code);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 
     private String promptItemCode(Scanner sc) {
         while (true) {
@@ -432,29 +470,6 @@ public final class POSConsole {
         }
     }
 
-    private void applyDiscountMenu(Scanner sc) {
-        System.out.println("Choose Discount:");
-        System.out.println("1. Percentage");
-        System.out.println("2. BOGO (Buy One Get One)");
-        System.out.println("0. None");
-        System.out.print("Selection: ");
-        String d = readLine(sc);
-
-        try {
-            DiscountPolicy p = null;
-            if ("1".equals(d)) {
-                System.out.print("Enter percentage (0-100): ");
-                int perc = readInt(sc);
-                p = new PercentageDiscount(perc);
-            } else if ("2".equals(d)) {
-                p = new BogoPolicy();
-            }
-            pos.applyDiscount(p);
-            System.out.println(" Discount applied.");
-        } catch (Exception ex) {
-            System.out.println(" Error: " + ex.getMessage());
-        }
-    }
 
     private void checkoutMenu(Scanner sc) {
         try {
@@ -577,22 +592,72 @@ public final class POSConsole {
             System.out.println("3. Update Batch Expiry");
             System.out.println("4. Delete Batch");
             System.out.println("5. Move MAIN -> STORE (FEFO)");
-            System.out.println("6. Item Catalog (CRUD)"); // <— NEW submenu
+            System.out.println("6. Item Catalog (CRUD)");
             System.out.println("7. Move MAIN -> SHELF (FEFO)");
             System.out.println("8. Move STORE -> SHELF (FEFO)");
+            System.out.println("9. Batch Discount Management"); // NEW
             System.out.println("0. Back");
             System.out.print("Choose: ");
             String ch = readLine(sc);
             try {
                 switch (ch) {
                     case "1" -> {
-                        System.out.print("Item code: "); String code = readLine(sc);
-                        System.out.print("Expiry (yyyy-MM-dd or blank): "); String s = readLine(sc);
+                        // NEW: Show all items first so manager can see available item codes
+                        System.out.println("\n=== Available Items ===");
+                        var allItems = inv.listAllItems();
+                        if (allItems.isEmpty()) {
+                            System.out.println("No items found in catalog. Please add items first.");
+                            break;
+                        }
+
+                        System.out.printf("%-14s %-30s %-15s%n", "ITEM CODE", "NAME", "UNIT PRICE");
+                        System.out.println("-".repeat(65));
+                        for (Item item : allItems) {
+                            System.out.printf("%-14s %-30s %-15s%n",
+                                item.code(),
+                                item.name().length() > 30 ? item.name().substring(0, 27) + "..." : item.name(),
+                                item.unitPrice().toString());
+                        }
+                        System.out.println("-".repeat(65));
+                        System.out.println("Total items: " + allItems.size());
+
+                        System.out.print("\nItem code: ");
+                        String code = readLine(sc);
+
+                        // Validate the entered item code exists
+                        boolean itemExists = false;
+                        for (Item item : allItems) {
+                            if (item.code().equals(code)) {
+                                itemExists = true;
+                                break;
+                            }
+                        }
+
+                        if (!itemExists) {
+                            System.out.println("❌ Invalid item code. Please choose from the list above.");
+                            break;
+                        }
+
+                        System.out.print("Expiry (yyyy-MM-dd or blank): ");
+                        String s = readLine(sc);
                         java.time.LocalDate exp = (s.isBlank() ? null : java.time.LocalDate.parse(s));
-                        System.out.print("Qty on SHELF: "); int qs = readInt(sc);
-                        System.out.print("Qty in STORE: "); int qst = readInt(sc);
+                        System.out.print("Qty on SHELF: ");
+                        int qs = readInt(sc);
+                        System.out.print("Qty in STORE: ");
+                        int qst = readInt(sc);
+
                         admin.addBatch(code, exp, qs, qst);
-                        System.out.println(" Batch added.");
+                        System.out.println("✅ Batch added for item: " + code);
+
+                        // NEW: Prompt for discount when adding batch
+                        if (exp != null && exp.isBefore(java.time.LocalDate.now().plusDays(30))) {
+                            System.out.println("⚠️ This batch expires within 30 days.");
+                            System.out.print("Add discount for close expiry? (y/n): ");
+                            String addDiscount = readLine(sc).toLowerCase();
+                            if ("y".equals(addDiscount) || "yes".equals(addDiscount)) {
+                                promptAddBatchDiscount(sc, code, "Close to expiry - expires " + exp);
+                            }
+                        }
                     }
                     case "2" -> {
                         System.out.print("Batch ID: "); long id = Long.parseLong(readLine(sc));
@@ -670,6 +735,7 @@ public final class POSConsole {
                         admin.moveStoreToShelfFEFO(code, q);
                         System.out.println("✅ Moved " + q + " STORE → SHELF (FEFO).");
                     }
+                    case "9" -> batchDiscountMenu(sc); // NEW
                     case "0" -> loop = false;
                     default -> System.out.println("Invalid choice.");
                 }
@@ -728,6 +794,165 @@ public final class POSConsole {
             } catch (Exception ex) {
                 System.out.println("⚠️ Error: " + ex.getMessage());
             }
+        }
+    }
+
+    private void batchDiscountMenu(Scanner sc) {
+        boolean loop = true;
+        while (loop) {
+            System.out.println("\n--- Batch Discount Management ---");
+            System.out.println("1. Add Discount to Batch");
+            System.out.println("2. View All Active Discounts");
+            System.out.println("3. Remove Discount");
+            System.out.println("0. Back");
+            System.out.print("Choose: ");
+            String ch = readLine(sc);
+            try {
+                switch (ch) {
+                    case "1" -> addDiscountToBatchMenu(sc);
+                    case "2" -> viewAllActiveDiscounts(sc);
+                    case "3" -> removeDiscountMenu(sc);
+                    case "0" -> loop = false;
+                    default -> System.out.println("Invalid choice.");
+                }
+            } catch (Exception ex) {
+                System.out.println("️ Error: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void addDiscountToBatchMenu(Scanner sc) {
+        try {
+            System.out.print("Batch ID: ");
+            long batchId = Long.parseLong(readLine(sc));
+
+            System.out.println("Discount Type:");
+            System.out.println("1. Percentage (e.g., 10%)");
+            System.out.println("2. Fixed Amount (e.g., LKR 50)");
+            System.out.print("Choose: ");
+            String typeChoice = readLine(sc);
+
+            domain.inventory.BatchDiscount.DiscountType type;
+            Money value;
+
+            if ("1".equals(typeChoice)) {
+                type = domain.inventory.BatchDiscount.DiscountType.PERCENTAGE;
+                System.out.print("Percentage (0-100): ");
+                double percent = readDouble(sc);
+                if (percent <= 0 || percent > 100) {
+                    System.out.println(" Percentage must be between 0 and 100");
+                    return;
+                }
+                value = Money.of(percent);
+            } else if ("2".equals(typeChoice)) {
+                type = domain.inventory.BatchDiscount.DiscountType.FIXED_AMOUNT;
+                System.out.print("Fixed amount (LKR): ");
+                double amount = readDouble(sc);
+                if (amount <= 0) {
+                    System.out.println(" Amount must be positive");
+                    return;
+                }
+                value = Money.of(amount);
+            } else {
+                System.out.println(" Invalid choice");
+                return;
+            }
+
+            System.out.print("Reason (e.g., 'Close to expiry', 'Overstock'): ");
+            String reason = readLine(sc);
+            if (reason.isBlank()) reason = "Manager discount";
+
+            admin.addBatchDiscount(batchId, type, value, reason, auth.currentUser().username());
+            System.out.println(" Discount added to batch " + batchId);
+
+        } catch (NumberFormatException e) {
+            System.out.println(" Invalid number format");
+        } catch (Exception e) {
+            System.out.println(" Failed to add discount: " + e.getMessage());
+        }
+    }
+
+    private void viewAllActiveDiscounts(Scanner sc) {
+        try {
+            var discounts = admin.getAllBatchDiscountsWithDetails();
+            if (discounts.isEmpty()) {
+                System.out.println("No active batch discounts found.");
+                return;
+            }
+
+            System.out.println("\n=== Active Batch Discounts ===");
+            System.out.printf("%-12s %-10s %-12s %-25s %-12s %-15s %-20s %-15s%n",
+                "DISCOUNT_ID", "BATCH_ID", "ITEM_CODE", "ITEM_NAME", "EXPIRY", "TYPE", "VALUE", "REASON");
+            System.out.println("=".repeat(140));
+
+            for (var discount : discounts) {
+                String expiryStr = discount.expiry() != null ? discount.expiry().toString() : "No expiry";
+                String typeStr = discount.discountType() == domain.inventory.BatchDiscount.DiscountType.PERCENTAGE ?
+                    "PERCENTAGE" : "FIXED_AMT";
+                String valueStr = discount.discountType() == domain.inventory.BatchDiscount.DiscountType.PERCENTAGE ?
+                    String.format("%.1f%%", discount.discountValue().asBigDecimal().doubleValue()) :
+                    String.format("LKR %.2f", discount.discountValue().asBigDecimal().doubleValue());
+
+                System.out.printf("%-12d %-10d %-12s %-25s %-12s %-15s %-20s %-15s%n",
+                    discount.discountId(), discount.batchId(), discount.itemCode(),
+                    discount.itemName(), expiryStr, typeStr, valueStr,
+                    discount.reason() != null ? discount.reason() : "N/A");
+            }
+
+            System.out.println("\nTotal active discounts: " + discounts.size());
+
+        } catch (Exception e) {
+            System.out.println("❌ Failed to retrieve discounts: " + e.getMessage());
+        }
+    }
+
+    private void removeDiscountMenu(Scanner sc) {
+        try {
+            // First show current discounts so manager can see what to remove
+            viewAllActiveDiscounts(sc);
+
+            System.out.print("\nEnter Discount ID to remove: ");
+            long discountId = Long.parseLong(readLine(sc));
+
+            System.out.print("Are you sure you want to remove discount " + discountId + "? (y/n): ");
+            String confirm = readLine(sc).toLowerCase();
+
+            if ("y".equals(confirm) || "yes".equals(confirm)) {
+                admin.removeBatchDiscount(discountId);
+                System.out.println("✅ Discount " + discountId + " removed successfully");
+            } else {
+                System.out.println("❌ Discount removal cancelled");
+            }
+
+        } catch (NumberFormatException e) {
+            System.out.println("❌ Invalid discount ID format");
+        } catch (Exception e) {
+            System.out.println("❌ Failed to remove discount: " + e.getMessage());
+        }
+    }
+
+    private void promptAddBatchDiscount(Scanner sc, String itemCode, String reason) {
+        try {
+            System.out.print("Batch ID for this item: ");
+            long batchId = Long.parseLong(readLine(sc));
+
+            System.out.print("Discount percentage (0-100): ");
+            double percent = readDouble(sc);
+            if (percent <= 0 || percent > 100) {
+                System.out.println("❌ Percentage must be between 0 and 100");
+                return;
+            }
+
+            String finalReason = reason != null ? reason : "Close to expiry discount";
+
+            admin.addBatchDiscount(batchId, domain.inventory.BatchDiscount.DiscountType.PERCENTAGE,
+                                 Money.of(percent), finalReason, auth.currentUser().username());
+            System.out.println("✅ " + percent + "% discount added to batch " + batchId);
+
+        } catch (NumberFormatException e) {
+            System.out.println("❌ Invalid number format");
+        } catch (Exception e) {
+            System.out.println("❌ Failed to add discount: " + e.getMessage());
         }
     }
 

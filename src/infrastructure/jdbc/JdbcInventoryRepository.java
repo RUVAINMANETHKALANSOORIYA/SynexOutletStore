@@ -2,6 +2,7 @@ package infrastructure.jdbc;
 
 import domain.common.Money;
 import domain.inventory.Batch;
+import domain.inventory.BatchDiscount;
 import domain.inventory.InventoryReservation;
 import domain.inventory.Item;
 import ports.out.InventoryRepository;
@@ -604,5 +605,140 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         } catch (SQLException e) {
             throw new RuntimeException("setItemRestockLevel failed", e);
         }
+    }
+
+    // ===== Batch discount management implementation =====
+    @Override
+    public void addBatchDiscount(long batchId, BatchDiscount.DiscountType type, Money value,
+                                String reason, String createdBy) {
+        String sql = """
+            INSERT INTO batch_discounts (batch_id, discount_type, discount_value, reason, 
+                                       valid_from, created_by) 
+            VALUES (?, ?, ?, ?, NOW(), ?)
+            """;
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, batchId);
+            ps.setString(2, type.name());
+            ps.setBigDecimal(3, value.asBigDecimal());
+            ps.setString(4, reason);
+            ps.setString(5, createdBy);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("addBatchDiscount failed", e);
+        }
+    }
+
+    @Override
+    public void removeBatchDiscount(long discountId) {
+        String sql = "UPDATE batch_discounts SET is_active = FALSE WHERE id = ?";
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, discountId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalStateException("Discount not found: " + discountId);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("removeBatchDiscount failed", e);
+        }
+    }
+
+    @Override
+    public Optional<BatchDiscount> findActiveBatchDiscount(long batchId) {
+        String sql = """
+            SELECT id, batch_id, discount_type, discount_value, reason, 
+                   valid_from, valid_until, created_by, created_at, is_active
+            FROM batch_discounts 
+            WHERE batch_id = ? AND is_active = TRUE
+            ORDER BY created_at DESC 
+            LIMIT 1
+            """;
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, batchId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(mapBatchDiscount(rs));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("findActiveBatchDiscount failed", e);
+        }
+    }
+
+    @Override
+    public List<BatchDiscount> findBatchDiscountsByBatch(long batchId) {
+        String sql = """
+            SELECT id, batch_id, discount_type, discount_value, reason, 
+                   valid_from, valid_until, created_by, created_at, is_active
+            FROM batch_discounts 
+            WHERE batch_id = ? 
+            ORDER BY created_at DESC
+            """;
+        List<BatchDiscount> discounts = new ArrayList<>();
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, batchId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    discounts.add(mapBatchDiscount(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("findBatchDiscountsByBatch failed", e);
+        }
+        return discounts;
+    }
+
+    @Override
+    public List<BatchDiscountView> getAllBatchDiscountsWithDetails() {
+        String sql = """
+            SELECT d.id as discount_id, d.batch_id, b.item_code, i.name as item_name, 
+                   b.expiry, d.discount_type, d.discount_value, d.reason, d.created_by, d.is_active
+            FROM batch_discounts d
+            JOIN batches b ON d.batch_id = b.id
+            JOIN items i ON b.item_code = i.item_code
+            WHERE d.is_active = TRUE
+            ORDER BY b.expiry ASC, d.created_at DESC
+            """;
+        List<BatchDiscountView> views = new ArrayList<>();
+        try (Connection c = Db.get();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                LocalDate expiry = rs.getDate("expiry") != null ?
+                    rs.getDate("expiry").toLocalDate() : null;
+                views.add(new BatchDiscountView(
+                    rs.getLong("discount_id"),
+                    rs.getLong("batch_id"),
+                    rs.getString("item_code"),
+                    rs.getString("item_name"),
+                    expiry,
+                    BatchDiscount.DiscountType.valueOf(rs.getString("discount_type")),
+                    new Money(rs.getBigDecimal("discount_value")),
+                    rs.getString("reason"),
+                    rs.getString("created_by"),
+                    rs.getBoolean("is_active")
+                ));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("getAllBatchDiscountsWithDetails failed", e);
+        }
+        return views;
+    }
+
+    private BatchDiscount mapBatchDiscount(ResultSet rs) throws SQLException {
+        return new BatchDiscount(
+            rs.getLong("id"),
+            rs.getLong("batch_id"),
+            BatchDiscount.DiscountType.valueOf(rs.getString("discount_type")),
+            new Money(rs.getBigDecimal("discount_value")),
+            rs.getString("reason"),
+            rs.getTimestamp("valid_from").toLocalDateTime(),
+            rs.getTimestamp("valid_until") != null ?
+                rs.getTimestamp("valid_until").toLocalDateTime() : null,
+            rs.getString("created_by"),
+            rs.getTimestamp("created_at").toLocalDateTime(),
+            rs.getBoolean("is_active")
+        );
     }
 }
