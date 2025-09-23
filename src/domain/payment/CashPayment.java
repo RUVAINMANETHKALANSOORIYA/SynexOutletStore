@@ -11,4 +11,14 @@ public final class CashPayment implements Payment {
         Money change = tendered.minus(billTotal);
         return new Receipt("CASH", tendered, change, null);
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof CashPayment;
+    }
+
+    @Override
+    public int hashCode() {
+        return CashPayment.class.hashCode();
+    }
 }

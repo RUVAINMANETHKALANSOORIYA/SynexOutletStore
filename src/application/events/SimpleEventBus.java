@@ -11,14 +11,22 @@ public final class SimpleEventBus implements EventBus {
         if (event == null) return;
         var list = handlers.getOrDefault(event.getClass(), List.of());
         for (Consumer<?> h : list) {
-            @SuppressWarnings("unchecked")
-            Consumer<Object> c = (Consumer<Object>) h;
-            c.accept(event);
+            if (h == null) continue; // Skip null handlers
+            try {
+                @SuppressWarnings("unchecked")
+                Consumer<Object> c = (Consumer<Object>) h;
+                c.accept(event);
+            } catch (Exception e) {
+                // Log exception but continue with other subscribers
+                System.err.println("Exception in event handler: " + e.getMessage());
+            }
         }
     }
 
     @Override
     public synchronized <T> void subscribe(Class<T> type, Consumer<T> handler) {
-        handlers.computeIfAbsent(type, k -> new ArrayList<>()).add(handler);
+        if (handler != null) { // Only add non-null handlers
+            handlers.computeIfAbsent(type, k -> new ArrayList<>()).add(handler);
+        }
     }
 }

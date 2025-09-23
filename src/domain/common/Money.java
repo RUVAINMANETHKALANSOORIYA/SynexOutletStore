@@ -23,6 +23,10 @@ public final class Money implements Comparable<Money> {
     public Money divide(int d){ return new Money(amount.divide(BigDecimal.valueOf(d), SCALE, RoundingMode.HALF_UP)); }
 
     public boolean isNegative() { return amount.compareTo(BigDecimal.ZERO) < 0; }
+    public boolean isZero() { return amount.compareTo(BigDecimal.ZERO) == 0; }
+    public boolean isPositive() { return amount.compareTo(BigDecimal.ZERO) > 0; }
+    public boolean isGreaterThan(Money other) { return this.compareTo(other) > 0; }
+    public boolean isLessThan(Money other) { return this.compareTo(other) < 0; }
 
     public String toFormattedString() {
         return "LKR " + LKR_FORMAT.format(amount);

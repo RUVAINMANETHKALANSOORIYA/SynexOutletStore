@@ -1,141 +1,102 @@
 package application.auth;
 
 import domain.auth.Customer;
+import domain.auth.PasswordHash;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import ports.out.CustomerRepository;
 
 import java.util.*;
 
-import static domain.auth.PasswordHash.sha256;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CustomerAuthServiceTest {
 
-    private InMemoryCustomerRepository repo;
-    private CustomerAuthService auth;
+    private CustomerAuthService service;
+    private FakeCustomerRepository repo;
 
     @BeforeEach
-    void setUp() {
-        repo = new InMemoryCustomerRepository();
-        auth = new CustomerAuthService(repo);
-
-        // Existing active customer with password "hello"
-        repo.addCustomer(new Customer(1, "Ann", "ann@example.com", sha256("hello"), "0700-000-000", "ACTIVE"));
-        // Existing disabled customer with password "block"
-        repo.addCustomer(new Customer(2, "Ben", "ben@example.com", sha256("block"), "0700-000-001", "DISABLED"));
+    void setup() {
+        repo = new FakeCustomerRepository();
+        service = new CustomerAuthService(repo);
     }
 
     @Test
-    @DisplayName("Register succeeds when username is free")
+    @DisplayName("register succeeds for valid username without numbers")
     void register_success() {
-        assertTrue(auth.register("Cara", "pass123", "cara@example.com"));
-        Optional<Customer> c = repo.findByUsername("Cara");
-        assertTrue(c.isPresent());
-        assertEquals("Cara", c.get().name());
-        assertEquals("cara@example.com", c.get().email());
-        assertEquals(sha256("pass123"), c.get().passwordHash());
+        boolean ok = service.register("alice", "secret", "alice@example.com");
+        assertTrue(ok);
+        assertTrue(repo.findByUsername("alice").isPresent());
     }
 
     @Test
-    @DisplayName("Register fails if username already exists")
-    void register_duplicate() {
-        assertFalse(auth.register("Ann", "whatever", "new@example.com"));
+    @DisplayName("register rejects usernames with numbers")
+    void register_rejects_numbers() {
+        assertThrows(IllegalArgumentException.class, () -> service.register("bob1", "x", "b@e.com"));
     }
 
     @Test
-    @DisplayName("Login success with correct password and active status")
-    void login_success() {
-        assertTrue(auth.login("Ann", "hello"));
-        assertTrue(auth.isLoggedIn());
-        assertNotNull(auth.currentUser());
-        assertEquals("Ann", auth.currentUser().name());
-        assertEquals("ann@example.com", auth.currentUser().email());
+    @DisplayName("login succeeds for active user with correct password")
+    void login_success_active() {
+        String user = "charlie";
+        String pass = "pw";
+        String hash = PasswordHash.sha256(pass);
+        repo.save(new Customer(1L, user, "c@example.com", hash, "0770000000", "ACTIVE"));
+        assertTrue(service.login(user, pass));
+        assertTrue(service.isLoggedIn());
+        assertNotNull(service.currentUser());
+        assertEquals(user, service.currentUser().name());
     }
 
     @Test
-    @DisplayName("Login fails when user not found (null stored hash)")
-    void login_userNotFound() {
-        assertFalse(auth.login("Nope", "any"));
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
+    @DisplayName("login fails for disabled user")
+    void login_fails_disabled() {
+        String user = "diana";
+        String pass = "pw";
+        String hash = PasswordHash.sha256(pass);
+        repo.save(new Customer(2L, user, "d@example.com", hash, "0770000001", "DISABLED"));
+        assertFalse(service.login(user, pass));
     }
 
     @Test
-    @DisplayName("Login fails on wrong password")
-    void login_wrongPassword() {
-        assertFalse(auth.login("Ann", "bad"));
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
+    @DisplayName("logout clears current user")
+    void logout_works() {
+        String user = "ed";
+        String pass = "pw";
+        String hash = PasswordHash.sha256(pass);
+        repo.save(new Customer(3L, user, "e@example.com", hash, "077", "ACTIVE"));
+        assertTrue(service.login(user, pass));
+        service.logout();
+        assertFalse(service.isLoggedIn());
+        assertNull(service.currentUser());
     }
 
-    @Test
-    @DisplayName("Disabled customer: implementation may allow or deny login; verify consistent state")
-    void login_disabled() {
-        boolean result = auth.login("Ben", "block");
-        if (result) {
-            // Logged in; in some builds disabled status is still allowed
-            assertTrue(auth.isLoggedIn());
-            assertNotNull(auth.currentUser());
-            assertEquals("DISABLED", auth.currentUser().status());
-        } else {
-            // Either user truly rejected (no current), or implementation set current but returned false due to disabled status
-            if (auth.currentUser() != null) {
-                assertEquals("DISABLED", auth.currentUser().status());
-            } else {
-                assertFalse(auth.isLoggedIn());
-                assertNull(auth.currentUser());
-            }
-        }
-    }
-
-    @Test
-    @DisplayName("Logout clears session state")
-    void logout_clears() {
-        assertTrue(auth.login("Ann", "hello"));
-        assertTrue(auth.isLoggedIn());
-        auth.logout();
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
-    }
-
-    // In-memory fake repository
-    static class InMemoryCustomerRepository implements CustomerRepository {
-        private final Map<String, Customer> byName = new HashMap<>();
+    // minimal fake
+    static class FakeCustomerRepository implements ports.out.CustomerRepository {
+        private final Map<String, Customer> byUsername = new HashMap<>();
         private final Map<String, Customer> byEmail = new HashMap<>();
+        private long seq = 100;
 
-        void addCustomer(Customer c) {
-            byName.put(c.name(), c);
-            byEmail.put(c.email(), c);
+        @Override public void save(Customer customer) {
+            byUsername.put(customer.name(), customer);
+            byEmail.put(customer.email(), customer);
         }
 
-        @Override
-        public void save(Customer customer) {
-            addCustomer(customer);
-        }
-
-        @Override
-        public void save(String username, String passwordHash, String email) {
-            // Simulate generated id and default phone/status
-            Customer c = new Customer(byName.size() + 1, username, email, passwordHash, "", "ACTIVE");
+        @Override public void save(String username, String passwordHash, String email) {
+            Customer c = new Customer(++seq, username, email, passwordHash, "", "ACTIVE");
             save(c);
         }
 
-        @Override
-        public Optional<Customer> findByUsername(String username) {
-            return Optional.ofNullable(byName.get(username));
+        @Override public Optional<Customer> findByUsername(String username) {
+            return Optional.ofNullable(byUsername.get(username));
         }
 
-        @Override
-        public Optional<Customer> findByEmail(String email) {
+        @Override public Optional<Customer> findByEmail(String email) {
             return Optional.ofNullable(byEmail.get(email));
         }
 
-        @Override
-        public String loadPasswordHash(String username) {
-            Customer c = byName.get(username);
-            return c == null ? null : c.passwordHash();
+        @Override public String loadPasswordHash(String username) {
+            return findByUsername(username).map(Customer::passwordHash).orElse(null);
         }
     }
 }

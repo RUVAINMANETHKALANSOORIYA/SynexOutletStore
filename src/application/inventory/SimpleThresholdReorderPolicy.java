@@ -5,7 +5,11 @@ public final class SimpleThresholdReorderPolicy implements ThresholdReorderPolic
 
     @Override
     public boolean needsRestock(int shelfQty, int threshold) {
-        return shelfQty < threshold;
+        // Handle negative values: negative stock should not trigger restock
+        if (shelfQty < 0) return false;
+        // Handle negative threshold: always needs restock if threshold is negative
+        if (threshold < 0) return true;
+        return shelfQty <= threshold;
     }
 
     /** Decide how many units to move in this operation. */

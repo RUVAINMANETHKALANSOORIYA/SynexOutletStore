@@ -28,7 +28,7 @@ public record BatchDiscount(
             return originalPrice;
         }
 
-        return switch (discountType) {
+        Money discountedPrice = switch (discountType) {
             case PERCENTAGE -> {
                 double percentage = discountValue.asBigDecimal().doubleValue();
                 double discountAmount = originalPrice.asBigDecimal().doubleValue() * (percentage / 100.0);
@@ -36,6 +36,9 @@ public record BatchDiscount(
             }
             case FIXED_AMOUNT -> originalPrice.minus(discountValue);
         };
+
+        // Ensure discounted price doesn't go below zero
+        return discountedPrice.compareTo(Money.ZERO) < 0 ? Money.ZERO : discountedPrice;
     }
 
     /**

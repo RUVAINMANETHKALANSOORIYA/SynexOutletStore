@@ -1,125 +1,183 @@
 package application.auth;
 
 import domain.auth.User;
+import ports.out.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import ports.out.UserRepository;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
-import static domain.auth.PasswordHash.sha256;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AuthServiceTest {
 
-    private static final String USER_PLAIN = "alice";
-    private static final String USER_HASHED = "bob";
-    private static final String USER_DISABLED = "carl";
-
-    private InMemoryUserRepository repo;
-    private AuthService auth;
+    private AuthService authService;
+    private FakeUserRepository fakeRepository;
 
     @BeforeEach
     void setUp() {
-        repo = new InMemoryUserRepository();
-        auth = new AuthService(repo);
+        fakeRepository = new FakeUserRepository();
+        authService = new AuthService(fakeRepository); // Fixed constructor
 
-        // Plaintext-stored user (dev-friendly fallback)
-        repo.addUser(new User(1, USER_PLAIN, "CASHIER", "a@example.com", "ACTIVE"), "secret");
-
-        // Hashed-stored user
-        repo.addUser(new User(2, USER_HASHED, "ADMIN", "b@example.com", "ACTIVE"), sha256("s3cr3t"));
-
-        // Disabled user with valid hash
-        repo.addUser(new User(3, USER_DISABLED, "CASHIER", "c@example.com", "DISABLED"), sha256("pwd"));
+        // Set up test users
+        fakeRepository.addUser(new User(1L, "testuser", "USER", "test@email.com", "ACTIVE"));
+        fakeRepository.addUser(new User(2L, "admin", "ADMIN", "admin@email.com", "ACTIVE"));
+        fakeRepository.addUser(new User(3L, "disabled", "USER", "disabled@email.com", "DISABLED"));
     }
 
     @Test
-    @DisplayName("Unknown user returns false and does not change current state")
-    void login_unknownUser() {
-        assertFalse(auth.login("nobody", "whatever"));
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
+    @DisplayName("AuthService successful login with valid credentials")
+    void successful_login() {
+        fakeRepository.setPassword("testuser", "password123");
+
+        boolean result = authService.login("testuser", "password123");
+
+        assertTrue(result);
+        assertTrue(authService.isLoggedIn());
+        assertNotNull(authService.currentUser());
+        assertEquals("testuser", authService.currentUser().username());
     }
 
     @Test
-    @DisplayName("Plaintext path: wrong password fails; correct succeeds and sets currentUser")
-    void login_plaintextPaths() {
-        assertFalse(auth.login(USER_PLAIN, "wrong"));
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
+    @DisplayName("AuthService failed login with invalid password")
+    void failed_login_invalid_password() {
+        fakeRepository.setPassword("testuser", "password123");
 
-        assertTrue(auth.login(USER_PLAIN, "secret"));
-        assertTrue(auth.isLoggedIn());
-        assertNotNull(auth.currentUser());
-        assertEquals(USER_PLAIN, auth.currentUser().username());
-        assertEquals("CASHIER", auth.currentUser().role());
+        boolean result = authService.login("testuser", "wrongpassword");
+
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
     }
 
     @Test
-    @DisplayName("Hashed path: wrong password fails; correct succeeds and sets currentUser")
-    void login_hashedPaths() {
-        assertFalse(auth.login(USER_HASHED, "wrong"));
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
+    @DisplayName("AuthService failed login with non-existent user")
+    void failed_login_nonexistent_user() {
+        boolean result = authService.login("nonexistent", "password");
 
-        assertTrue(auth.login(USER_HASHED, "s3cr3t"));
-        assertTrue(auth.isLoggedIn());
-        assertEquals(USER_HASHED, auth.currentUser().username());
-        assertEquals("ADMIN", auth.currentUser().role());
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
     }
 
     @Test
-    @DisplayName("Disabled user: implementation may allow or deny login; verify consistent state")
-    void login_disabledUser() {
-        boolean result = auth.login(USER_DISABLED, "pwd");
-        if (result) {
-            // Logged in; in some builds disabled status is still allowed
-            assertTrue(auth.isLoggedIn());
-            assertNotNull(auth.currentUser());
-            assertEquals("DISABLED", auth.currentUser().status());
-        } else {
-            // Either user truly rejected (no current), or implementation set current but returned false due to disabled status
-            if (auth.currentUser() != null) {
-                assertEquals("DISABLED", auth.currentUser().status());
-            } else {
-                assertFalse(auth.isLoggedIn());
-                assertNull(auth.currentUser());
-            }
+    @DisplayName("AuthService failed login with null username")
+    void failed_login_null_username() {
+        boolean result = authService.login(null, "password");
+
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
+    }
+
+    @Test
+    @DisplayName("AuthService failed login with null password")
+    void failed_login_null_password() {
+        boolean result = authService.login("testuser", null);
+
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
+    }
+
+    @Test
+    @DisplayName("AuthService failed login with empty username")
+    void failed_login_empty_username() {
+        boolean result = authService.login("", "password");
+
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
+    }
+
+    @Test
+    @DisplayName("AuthService failed login with username containing numbers")
+    void failed_login_username_with_numbers() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            authService.login("user123", "password");
+        });
+    }
+
+    @Test
+    @DisplayName("AuthService failed login with disabled user")
+    void failed_login_disabled_user() {
+        fakeRepository.setPassword("disabled", "password123");
+
+        boolean result = authService.login("disabled", "password123");
+
+        assertFalse(result);
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
+    }
+
+    @Test
+    @DisplayName("AuthService logout clears current user")
+    void logout_clears_user() {
+        fakeRepository.setPassword("testuser", "password123");
+        authService.login("testuser", "password123");
+
+        assertTrue(authService.isLoggedIn());
+
+        authService.logout();
+
+        assertFalse(authService.isLoggedIn());
+        assertNull(authService.currentUser());
+    }
+
+    @Test
+    @DisplayName("AuthService multiple login attempts")
+    void multiple_login_attempts() {
+        fakeRepository.setPassword("testuser", "password123");
+        fakeRepository.setPassword("admin", "adminpass");
+
+        // First login
+        assertTrue(authService.login("testuser", "password123"));
+        assertEquals("testuser", authService.currentUser().username());
+
+        // Logout and login as different user
+        authService.logout();
+        assertTrue(authService.login("admin", "adminpass"));
+        assertEquals("admin", authService.currentUser().username());
+    }
+
+    @Test
+    @DisplayName("AuthService current user returns correct user")
+    void current_user_returns_correct_user() {
+        fakeRepository.setPassword("admin", "adminpass");
+
+        authService.login("admin", "adminpass");
+
+        User currentUser = authService.currentUser();
+        assertNotNull(currentUser);
+        assertEquals("admin", currentUser.username());
+        assertEquals("ADMIN", currentUser.role());
+        assertEquals("admin@email.com", currentUser.email());
+    }
+
+    // Fake repository implementation for testing
+    static class FakeUserRepository implements UserRepository {
+        private final List<User> users = new ArrayList<>();
+        private final java.util.Map<String, String> passwords = new java.util.HashMap<>();
+
+        public void addUser(User user) {
+            users.add(user);
         }
-    }
 
-    @Test
-    @DisplayName("Logout clears session state")
-    void logout_clearsState() {
-        assertTrue(auth.login(USER_PLAIN, "secret"));
-        assertTrue(auth.isLoggedIn());
-        auth.logout();
-        assertFalse(auth.isLoggedIn());
-        assertNull(auth.currentUser());
-    }
-
-    // Simple in-memory fake
-    static class InMemoryUserRepository implements UserRepository {
-        private final Map<String, User> users = new HashMap<>();
-        private final Map<String, String> hashes = new HashMap<>();
-
-        void addUser(User user, String passwordOrHash) {
-            users.put(user.username(), user);
-            hashes.put(user.username(), passwordOrHash);
+        public void setPassword(String username, String password) {
+            passwords.put(username, password);
         }
 
         @Override
         public Optional<User> findByUsername(String username) {
-            return Optional.ofNullable(users.get(username));
+            return users.stream().filter(u -> u.username().equals(username)).findFirst();
         }
 
         @Override
         public String loadPasswordHash(String username) {
-            return hashes.get(username);
+            return passwords.get(username);
         }
     }
 }
