@@ -46,11 +46,26 @@ public final class AutoDiscountService {
             return null;
         }
 
-        return new BatchDiscountPolicy(bill, inventoryAdmin);
+        // Check if any line items have batch discounts applied
+        boolean hasBatchDiscounts = false;
+        for (BillLine line : bill.lines()) {
+            for (InventoryReservation reservation : line.reservations()) {
+                Optional<BatchDiscount> discount = inventoryAdmin.findActiveBatchDiscount(reservation.batchId);
+                if (discount.isPresent() && discount.get().isValidNow()) {
+                    hasBatchDiscounts = true;
+                    break;
+                }
+            }
+            if (hasBatchDiscounts) break;
+        }
+
+        // Return a policy that indicates batch discounts are already applied, but don't double-apply
+        return hasBatchDiscounts ? new BatchDiscountPolicy(bill, inventoryAdmin) : null;
     }
 
     /**
-     * Discount policy that applies batch-specific discounts to eligible items
+     * Discount policy that indicates batch discounts are applied at line level
+     * This policy returns ZERO additional discount since discounts are already in line prices
      */
     private static class BatchDiscountPolicy implements DiscountPolicy {
         private final Bill bill;
@@ -67,33 +82,10 @@ public final class AutoDiscountService {
         }
 
         @Override
-        public String description() {
-            return "Batch discounts applied to eligible items";
-        }
-
-        @Override
         public Money computeDiscount(Bill bill) {
-            Money totalDiscount = Money.ZERO;
-
-            for (BillLine line : bill.lines()) {
-                for (InventoryReservation reservation : line.reservations()) {
-                    Optional<BatchDiscount> discount = inventoryAdmin.findActiveBatchDiscount(reservation.batchId);
-                    if (discount.isPresent() && discount.get().isValidNow()) {
-                        Money originalPrice = inventoryAdmin.priceOf(line.itemCode());
-                        Money discountedPrice = discount.get().calculateDiscountedPrice(originalPrice);
-                        Money itemDiscount = originalPrice.minus(discountedPrice);
-                        totalDiscount = totalDiscount.plus(itemDiscount.times(reservation.quantity));
-                    }
-                }
-            }
-
-            return totalDiscount;
-        }
-
-        @Override
-        public void apply(Bill bill) {
-            // The discount is already applied at the line item level in POSController
-            // This method is called by PricingService to finalize the discount
+            // Return ZERO because batch discounts are already applied at the line item level
+            // in calculateBestPriceFromReservations(). This policy is just for identification.
+            return Money.ZERO;
         }
     }
 }

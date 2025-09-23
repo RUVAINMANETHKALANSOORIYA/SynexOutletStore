@@ -6,6 +6,7 @@ import domain.billing.BillNumberGenerator;
 import domain.billing.BillWriter;
 import domain.common.Money;
 import domain.inventory.InventoryReservation;
+import domain.inventory.BatchDiscount; // Add this import
 import application.inventory.InventoryService;
 import application.inventory.InventoryAdminService;
 import domain.payment.CashPayment;
@@ -25,6 +26,7 @@ import application.events.events.StockDepleted;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public final class POSController {
@@ -145,12 +147,30 @@ public final class POSController {
 
         // Apply batch discounts if found
         if (batchDiscount != null) {
-            Money discountAmount = batchDiscount.computeDiscount(active);
-            if (discountAmount.compareTo(Money.ZERO) > 0) {
-                activeDiscount = batchDiscount;
-                System.out.println("🎉 Batch Discount Applied - You save: " + discountAmount);
+            activeDiscount = batchDiscount;
+
+            // Calculate the actual discount amount for display by comparing original vs current prices
+            Money actualDiscount = calculateActualBatchDiscountAmount();
+            if (actualDiscount.compareTo(Money.ZERO) > 0) {
+                System.out.println("🎉 Batch Discount Applied - You save: " + actualDiscount);
             }
         }
+    }
+
+    /**
+     * Calculate the actual batch discount amount by comparing original prices with discounted line prices
+     */
+    private Money calculateActualBatchDiscountAmount() {
+        Money totalOriginalPrice = Money.ZERO;
+        Money totalDiscountedPrice = Money.ZERO;
+
+        for (BillLine line : active.lines()) {
+            Money originalPrice = inventory.priceOf(line.itemCode());
+            totalOriginalPrice = totalOriginalPrice.plus(originalPrice.multiply(line.quantity()));
+            totalDiscountedPrice = totalDiscountedPrice.plus(line.lineTotal());
+        }
+
+        return totalOriginalPrice.minus(totalDiscountedPrice);
     }
 
     public void removeItem(String code) {
@@ -297,6 +317,13 @@ public final class POSController {
             return "No discount applied";
         }
 
+        // For batch discounts, calculate the actual discount amount
+        if ("BATCH_DISCOUNT".equals(activeDiscount.code())) {
+            Money actualDiscount = calculateActualBatchDiscountAmount();
+            return "Current Discount: BATCH_DISCOUNTS (Saves: " + actualDiscount + ")";
+        }
+
+        // For other discount types, use the computed discount
         Money discountAmount = activeDiscount.computeDiscount(active);
         return "Current Discount: " + activeDiscount.code() + " (Saves: " + discountAmount + ")";
     }
@@ -309,7 +336,27 @@ public final class POSController {
             return List.of("No active bill");
         }
 
-        return autoDiscountService.getBatchDiscountDescriptions(active);
+        List<String> discountDescriptions = new ArrayList<>();
+
+        for (BillLine line : active.lines()) {
+            for (InventoryReservation reservation : line.reservations()) {
+                Optional<BatchDiscount> discount = inventoryAdmin.findActiveBatchDiscount(reservation.batchId);
+                if (discount.isPresent() && discount.get().isValidNow()) {
+                    String description = String.format("%s: %s",
+                        line.itemName(),
+                        discount.get().getDescription());
+                    if (!discountDescriptions.contains(description)) {
+                        discountDescriptions.add(description);
+                    }
+                }
+            }
+        }
+
+        if (discountDescriptions.isEmpty()) {
+            return List.of("No batch discounts available");
+        }
+
+        return discountDescriptions;
     }
 
     /**

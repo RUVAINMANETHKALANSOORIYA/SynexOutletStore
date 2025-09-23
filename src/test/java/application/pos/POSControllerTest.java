@@ -1,6 +1,7 @@
 package application.pos;
 
 import application.events.EventBus;
+import application.inventory.InventoryAdminService;
 import application.inventory.InventoryService;
 import application.pricing.PricingService;
 import domain.billing.Bill;
@@ -28,6 +29,7 @@ class POSControllerTest {
 
     private InventoryService inv;
     private FakeInventoryRepo invRepo;
+    private InventoryAdminService invAdmin; // Add InventoryAdminService
     private PricingService pricing;
     private FakeBillNoGen billNos;
     private FakeBillRepo repo;
@@ -38,13 +40,14 @@ class POSControllerTest {
     @BeforeEach
     void setup() {
         invRepo = new FakeInventoryRepo();
-        inv = new InventoryService(invRepo, new application.inventory.FefoBatchSelector()); // Use non-deprecated constructor
-        pricing = new PricingService(0.0, inv); // Updated to include inventory service
+        inv = new InventoryService(invRepo, new application.inventory.FefoBatchSelector());
+        invAdmin = new InventoryAdminService(invRepo); // Initialize InventoryAdminService
+        pricing = new PricingService(0.0, inv);
         billNos = new FakeBillNoGen();
         repo = new FakeBillRepo();
         writer = new FakeBillWriter();
         events = new CapturingEvents();
-        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
+        pos = new POSController(inv, invAdmin, pricing, billNos, repo, writer, events); // Pass invAdmin instead of null
         pos.newBill();
     }
 
@@ -126,7 +129,7 @@ class POSControllerTest {
     @Test
     @DisplayName("total throws if no items added")
     void total_throws_if_no_items() {
-        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
+        pos = new POSController(inv, invAdmin, pricing, billNos, repo, writer, events); // Pass invAdmin instead of null
         pos.newBill();
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> pos.total());
         assertTrue(ex.getMessage().toLowerCase().contains("no items"));
@@ -213,7 +216,7 @@ class POSControllerTest {
     @Test
     @DisplayName("guard: operations throw when no active bill")
     void guard_no_active_bill() {
-        pos = new POSController(inv, null, pricing, billNos, repo, writer, events); // Fixed parameter order
+        pos = new POSController(inv, invAdmin, pricing, billNos, repo, writer, events); // Pass invAdmin instead of null
         assertThrows(IllegalStateException.class, () -> pos.addItem("A", 1));
         assertThrows(IllegalStateException.class, () -> pos.addItemSmart("A", 1, false, false));
         assertThrows(IllegalStateException.class, () -> pos.removeItem("A"));
