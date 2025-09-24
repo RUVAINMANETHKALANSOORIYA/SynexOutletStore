@@ -340,6 +340,18 @@ public final class POSController {
         return totalOriginalPrice.minus(totalDiscountedPrice);
     }
 
+//    // Method to support State pattern - allows state objects to change controller state
+//    public void changeState(application.pos.patterns.BillState newState) {
+//        // This method would be called by state objects but for now we'll keep it simple
+//        // In a full implementation, this would update an internal state field
+//    }
+//
+//    // Method to support Command pattern - allows commands to access controller operations
+//    public void doAddItem(String code, int qty) {
+//        // This wraps the existing addItem functionality for command pattern access
+//        this.addItem(code, qty);
+//    }
+
     /**
      * Custom exception for POS operations
      */
