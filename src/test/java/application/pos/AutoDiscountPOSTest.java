@@ -1,6 +1,7 @@
 package application.pos;
 
 import application.events.EventBus;
+import application.pos.controllers.POSController;
 import ports.in.InventoryService;
 import application.inventory.InventoryAdminService;
 import application.pricing.PricingService;

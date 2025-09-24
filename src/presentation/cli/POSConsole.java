@@ -5,7 +5,7 @@ import application.auth.CustomerAuthService;
 import application.inventory.InventoryAdminService;
 import ports.in.InventoryService;
 import application.inventory.RestockService;
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 import ports.in.ReportingService;
 import domain.common.Money;
 import domain.inventory.Item;
@@ -633,9 +633,9 @@ public final class POSConsole {
                         System.out.println("-".repeat(65));
                         for (Item item : allItems) {
                             System.out.printf("%-14s %-30s %-15s%n",
-                                item.code(),
-                                item.name().length() > 30 ? item.name().substring(0, 27) + "..." : item.name(),
-                                item.unitPrice().toString());
+                                    item.code(),
+                                    item.name().length() > 30 ? item.name().substring(0, 27) + "..." : item.name(),
+                                    item.unitPrice().toString());
                         }
                         System.out.println("-".repeat(65));
                         System.out.println("Total items: " + allItems.size());
@@ -789,7 +789,7 @@ public final class POSConsole {
                         System.out.print("New name (leave blank to keep current): "); String name = readLine(sc);
                         System.out.print("New unit price (0 to keep current): "); double price = readDouble(sc);
 
-                    if (!name.isBlank()) admin.renameItem(code, name);
+                        if (!name.isBlank()) admin.renameItem(code, name);
                         if (price > 0) admin.setItemPrice(code, domain.common.Money.of(price));
                         System.out.println("Item updated.");
                     }
@@ -901,21 +901,21 @@ public final class POSConsole {
 
             System.out.println("\n=== Active Batch Discounts ===");
             System.out.printf("%-12s %-10s %-12s %-25s %-12s %-15s %-20s %-15s%n",
-                "DISCOUNT_ID", "BATCH_ID", "ITEM_CODE", "ITEM_NAME", "EXPIRY", "TYPE", "VALUE", "REASON");
+                    "DISCOUNT_ID", "BATCH_ID", "ITEM_CODE", "ITEM_NAME", "EXPIRY", "TYPE", "VALUE", "REASON");
             System.out.println("=".repeat(140));
 
             for (var discount : discounts) {
                 String expiryStr = discount.expiry() != null ? discount.expiry().toString() : "No expiry";
                 String typeStr = discount.discountType() == domain.inventory.BatchDiscount.DiscountType.PERCENTAGE ?
-                    "PERCENTAGE" : "FIXED_AMT";
+                        "PERCENTAGE" : "FIXED_AMT";
                 String valueStr = discount.discountType() == domain.inventory.BatchDiscount.DiscountType.PERCENTAGE ?
-                    String.format("%.1f%%", discount.discountValue().asBigDecimal().doubleValue()) :
-                    String.format("LKR %.2f", discount.discountValue().asBigDecimal().doubleValue());
+                        String.format("%.1f%%", discount.discountValue().asBigDecimal().doubleValue()) :
+                        String.format("LKR %.2f", discount.discountValue().asBigDecimal().doubleValue());
 
                 System.out.printf("%-12d %-10d %-12s %-25s %-12s %-15s %-20s %-15s%n",
-                    discount.discountId(), discount.batchId(), discount.itemCode(),
-                    discount.itemName(), expiryStr, typeStr, valueStr,
-                    discount.reason() != null ? discount.reason() : "N/A");
+                        discount.discountId(), discount.batchId(), discount.itemCode(),
+                        discount.itemName(), expiryStr, typeStr, valueStr,
+                        discount.reason() != null ? discount.reason() : "N/A");
             }
 
             System.out.println("\nTotal active discounts: " + discounts.size());
@@ -965,7 +965,7 @@ public final class POSConsole {
             String finalReason = reason != null ? reason : "Close to expiry discount";
 
             admin.addBatchDiscount(batchId, domain.inventory.BatchDiscount.DiscountType.PERCENTAGE,
-                                 Money.of(percent), finalReason, auth.currentUser().username());
+                    Money.of(percent), finalReason, auth.currentUser().username());
             System.out.println("Done " + percent + "% discount added to batch " + batchId);
 
         } catch (NumberFormatException e) {
@@ -998,3 +998,4 @@ public final class POSConsole {
         }
     }
 }
+

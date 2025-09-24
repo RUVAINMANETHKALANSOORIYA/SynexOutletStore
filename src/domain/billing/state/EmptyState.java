@@ -1,6 +1,6 @@
 package domain.billing.state;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Empty state - no active bill

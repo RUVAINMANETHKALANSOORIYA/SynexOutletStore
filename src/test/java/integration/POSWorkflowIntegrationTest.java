@@ -3,7 +3,7 @@ package integration;
 import application.inventory.InventoryAdminService;
 import ports.in.InventoryService;
 import application.inventory.FefoBatchSelector;
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 import application.pricing.PricingService;
 import domain.billing.Bill;
 import domain.billing.BillNumberGenerator;

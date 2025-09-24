@@ -1,6 +1,6 @@
 package application.pos.patterns.command;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Command to remove an item from the current bill

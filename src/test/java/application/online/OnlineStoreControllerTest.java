@@ -3,7 +3,7 @@ package application.online;
 import application.events.EventBus;
 import ports.in.InventoryService;
 import application.pricing.PricingService;
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 import domain.billing.Bill;
 import domain.billing.BillLine;
 import domain.billing.BillNumberGenerator;

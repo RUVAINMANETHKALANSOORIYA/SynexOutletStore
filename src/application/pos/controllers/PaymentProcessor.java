@@ -1,4 +1,4 @@
-package application.pos;
+package application.pos.controllers;
 
 import domain.billing.Bill;
 import domain.payment.Payment;

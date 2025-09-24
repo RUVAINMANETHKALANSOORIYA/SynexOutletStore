@@ -6,7 +6,7 @@ import domain.billing.BillNumberGenerator;
 import ports.out.BillRepository;
 import domain.billing.BillWriter;
 import application.events.EventBus;
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Main factory for creating POS-related services and components

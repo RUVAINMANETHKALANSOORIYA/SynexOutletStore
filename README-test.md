@@ -11,7 +11,7 @@ Structure
   - support/builders: ItemBuilder, BatchBuilder, BillBuilder
 
 Key Test Areas
-- application.pos.POSController: end-to-end controller behaviors (new bill, add/remove items, smart reservations, payments, checkout, events, state reset). 
+- application.pos.controllers.POSController: end-to-end controller behaviors (new bill, add/remove items, smart reservations, payments, checkout, events, state reset). 
 - ports.in.InventoryService: FEFO selections, smart reservation branches, quantity helpers, and movement operations. 
 - application.pricing.PricingService: subtotal, discounts (capped), taxes, rounding. 
 - domain.billing.Bill & BillLine: state transitions (Draft→Paid) and rendering. 

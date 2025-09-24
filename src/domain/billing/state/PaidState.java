@@ -1,6 +1,6 @@
 package domain.billing.state;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Paid state - bill has been paid but not yet finalized

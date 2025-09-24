@@ -9,7 +9,7 @@ import application.reporting.ReportRepository;
 import ports.in.ReportingService;
 import ports.in.AuthService;
 import application.auth.CustomerAuthService;
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 import application.pricing.PricingService;
 import application.events.EventBus;
 import application.events.SimpleEventBus;

@@ -1,6 +1,6 @@
 package domain.billing.state;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Active state - bill is being built with items

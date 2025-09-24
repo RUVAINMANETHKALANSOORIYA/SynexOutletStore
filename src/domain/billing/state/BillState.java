@@ -1,6 +1,6 @@
 package domain.billing.state;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * State interface for the Bill state machine

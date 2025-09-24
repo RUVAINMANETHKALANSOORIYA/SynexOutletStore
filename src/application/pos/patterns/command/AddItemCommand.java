@@ -1,6 +1,6 @@
 package application.pos.patterns.command;
 
-import application.pos.POSController;
+import application.pos.controllers.POSController;
 
 /**
  * Command to add an item to the current bill
