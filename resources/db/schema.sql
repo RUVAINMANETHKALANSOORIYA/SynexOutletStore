@@ -132,13 +132,7 @@ INSERT IGNORE INTO items (item_code, name, unit_price) VALUES
 ('RC0001','Rice 5kg', 1200.00);
 
 
-CREATE TABLE IF NOT EXISTS customers (
-                                         id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-                                         name          VARCHAR(200) NOT NULL,
-    email         VARCHAR(128) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    phone         VARCHAR(32)
-    ) ENGINE=InnoDB;
+
 
 INSERT INTO batches (item_code, expiry, qty_on_shelf, qty_in_store) VALUES
 ('BR0001', DATE_ADD(CURDATE(), INTERVAL 180 DAY), 20, 80),

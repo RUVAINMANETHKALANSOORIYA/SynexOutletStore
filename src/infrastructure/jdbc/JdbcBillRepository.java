@@ -4,8 +4,7 @@ import domain.billing.Bill;
 import domain.billing.BillLine;
 import domain.billing.Receipt;
 import ports.out.BillRepository;
-
-import infrastructure.jdbc.Db;            // ✅ add this import
+import infrastructure.jdbc.Db;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -140,8 +139,7 @@ public final class JdbcBillRepository implements BillRepository {
                 c.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            throw new RuntimeException("deleteBill(billId) failed", e);
+            throw new RuntimeException("Failed to delete bill: " + e.getMessage(), e);
         }
     }
 }
