@@ -1,6 +1,7 @@
 package application.auth;
 
 import domain.auth.User;
+import ports.in.AuthService;
 import ports.out.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

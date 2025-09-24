@@ -3,6 +3,7 @@ package application.inventory;
 import domain.common.Money;
 import domain.inventory.Item;
 import domain.inventory.InventoryReservation;
+import ports.in.InventoryService;
 import ports.out.InventoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

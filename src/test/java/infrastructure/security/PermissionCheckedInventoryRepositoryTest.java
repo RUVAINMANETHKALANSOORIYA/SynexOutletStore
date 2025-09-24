@@ -1,6 +1,6 @@
 package infrastructure.security;
 
-import application.auth.AuthService;
+import ports.in.AuthService;
 import domain.auth.User;
 import domain.common.Money;
 import domain.inventory.Item;

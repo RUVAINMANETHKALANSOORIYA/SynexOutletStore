@@ -26,7 +26,7 @@ class JdbcBillRepositoryTest {
     void save_bill_complete() {
         Bill bill = createTestBill();
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -35,7 +35,7 @@ class JdbcBillRepositoryTest {
         Bill bill = new Bill("MIN-001");
         bill.setPricing(Money.ZERO, Money.ZERO, Money.ZERO, Money.ZERO);
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -46,7 +46,7 @@ class JdbcBillRepositoryTest {
         bill.setChannel(null);
         bill.setPricing(Money.ZERO, Money.ZERO, Money.ZERO, Money.ZERO);
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -57,7 +57,7 @@ class JdbcBillRepositoryTest {
         bill.setChannel("");
         bill.setPricing(Money.ZERO, Money.ZERO, Money.ZERO, Money.ZERO);
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -74,7 +74,7 @@ class JdbcBillRepositoryTest {
 
         bill.setPricing(Money.of(70.0), Money.of(7.0), Money.of(9.45), Money.of(72.45));
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -85,7 +85,7 @@ class JdbcBillRepositoryTest {
         bill.addLine(new BillLine("SPËCIAL", "Spëcial Itëm", Money.of(15.0), 1, List.of()));
         bill.setPricing(Money.of(15.0), Money.ZERO, Money.ZERO, Money.of(15.0));
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -95,7 +95,7 @@ class JdbcBillRepositoryTest {
         bill.addLine(new BillLine("EXPENSIVE", "Expensive Item", Money.of(99999.99), 100, List.of()));
         bill.setPricing(Money.of(9999999.0), Money.of(999999.9), Money.of(1499999.85), Money.of(10499999.95));
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -105,7 +105,7 @@ class JdbcBillRepositoryTest {
         Payment.Receipt cashReceipt = new Payment.Receipt("CASH", Money.of(110.0), Money.of(10.0), null);
         bill.setPayment(cashReceipt);
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
@@ -115,13 +115,13 @@ class JdbcBillRepositoryTest {
         Payment.Receipt cardReceipt = new Payment.Receipt("CARD", Money.of(100.0), Money.ZERO, "4567");
         bill.setPayment(cardReceipt);
 
-        assertDoesNotThrow(() -> repository.save(bill));
+        assertDoesNotThrow(() -> repository.saveBill(bill));
     }
 
     @Test
     @DisplayName("Save null bill throws exception")
     void save_null_bill() {
-        assertThrows(NullPointerException.class, () -> repository.save(null));
+        assertThrows(NullPointerException.class, () -> repository.saveBill(null));
     }
 
     @Test
@@ -130,10 +130,10 @@ class JdbcBillRepositoryTest {
         Bill bill1 = createTestBill("DUP-001");
         Bill bill2 = createTestBill("DUP-001");
 
-        assertDoesNotThrow(() -> repository.save(bill1));
+        assertDoesNotThrow(() -> repository.saveBill(bill1));
         // Remove the duplicate exception test since the repository might allow duplicates
         // or handle them differently than expected
-        assertDoesNotThrow(() -> repository.save(bill2));
+        assertDoesNotThrow(() -> repository.saveBill(bill2));
     }
 
     @Test
@@ -143,7 +143,7 @@ class JdbcBillRepositoryTest {
 
         // Should either succeed or throw RuntimeException
         try {
-            repository.save(bill);
+            repository.saveBill(bill);
         } catch (RuntimeException e) {
             assertNotNull(e.getMessage());
         }

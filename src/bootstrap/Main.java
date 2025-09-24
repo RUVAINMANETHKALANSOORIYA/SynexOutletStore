@@ -2,12 +2,12 @@ package bootstrap;
 
 import application.inventory.FefoBatchSelector;
 import application.inventory.InventoryAdminService;
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 import application.inventory.RestockService;
 import application.reporting.ReportPrinter;
 import application.reporting.ReportRepository;
-import application.reporting.ReportingService;
-import application.auth.AuthService;
+import ports.in.ReportingService;
+import ports.in.AuthService;
 import application.auth.CustomerAuthService;
 import application.pos.POSController;
 import application.pricing.PricingService;

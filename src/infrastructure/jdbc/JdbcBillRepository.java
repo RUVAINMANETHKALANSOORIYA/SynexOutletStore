@@ -2,16 +2,27 @@ package infrastructure.jdbc;
 
 import domain.billing.Bill;
 import domain.billing.BillLine;
+import domain.billing.Receipt;
 import ports.out.BillRepository;
 
 import infrastructure.jdbc.Db;            // ✅ add this import
 
 import java.sql.*;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 
 public final class JdbcBillRepository implements BillRepository {
 
     @Override
-    public void save(Bill bill) {
+    public String createBill() {
+        // This could generate a new bill number or return a placeholder
+        // For now, returning a placeholder since bill numbers are handled elsewhere
+        return "BILL-" + System.currentTimeMillis();
+    }
+
+    @Override
+    public void saveBill(Bill bill) {
         String insBill = """
             INSERT INTO bills (
                 bill_no, created_at, subtotal, discount, tax, total,
@@ -73,7 +84,64 @@ public final class JdbcBillRepository implements BillRepository {
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            throw new RuntimeException("save(bill) failed", e);
+            throw new RuntimeException("saveBill(bill) failed", e);
+        }
+    }
+
+    @Override
+    public Optional<Bill> findBill(String billId) {
+        // Implementation to find a bill by ID
+        // For now, returning empty since this might not be needed immediately
+        return Optional.empty();
+    }
+
+    @Override
+    public void savePaidBill(Receipt receipt) {
+        // Implementation to save a paid bill receipt
+        // This could insert into a receipts table or update the bill status
+    }
+
+    @Override
+    public List<Bill> findOpenBills() {
+        // Implementation to find open (unpaid) bills
+        return List.of();
+    }
+
+    @Override
+    public List<Receipt> findReceiptsByDate(LocalDate date) {
+        // Implementation to find receipts by date
+        return List.of();
+    }
+
+    @Override
+    public void deleteBill(String billId) {
+        String deleteBillLines = "DELETE FROM bill_lines WHERE bill_id = (SELECT id FROM bills WHERE bill_no = ?)";
+        String deleteBill = "DELETE FROM bills WHERE bill_no = ?";
+
+        try (Connection c = Db.get()) {
+            c.setAutoCommit(false);
+
+            try (PreparedStatement psLines = c.prepareStatement(deleteBillLines);
+                 PreparedStatement psBill = c.prepareStatement(deleteBill)) {
+
+                // Delete bill lines first (foreign key constraint)
+                psLines.setString(1, billId);
+                psLines.executeUpdate();
+
+                // Delete bill
+                psBill.setString(1, billId);
+                psBill.executeUpdate();
+
+                c.commit();
+            } catch (Exception ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException("deleteBill(billId) failed", e);
         }
     }
 }

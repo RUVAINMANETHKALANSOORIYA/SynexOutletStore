@@ -1,17 +1,14 @@
 package presentation.cli;
 
-import application.auth.AuthService;
+import ports.in.AuthService;
 import application.auth.CustomerAuthService;
 import application.inventory.InventoryAdminService;
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 import application.inventory.RestockService;
 import application.pos.POSController;
-import application.reporting.ReportingService;
+import ports.in.ReportingService;
 import domain.common.Money;
 import domain.inventory.Item;
-import domain.pricing.BogoPolicy;
-import domain.pricing.DiscountPolicy;
-import domain.pricing.PercentageDiscount;
 
 import java.time.LocalDate;
 import java.util.Locale;
@@ -65,14 +62,14 @@ public final class POSConsole {
                         String p = readLine(sc);
                         try {
                             if (customerAuth.login(u, p)) {
-                                System.out.println("✅ Customer login successful. Welcome " + u + "!");
+                                System.out.println(" Customer login successful. Welcome " + u + "!");
                                 customerLoggedIn = true;
                                 currentCustomer = u;
                             } else {
-                                System.out.println("❌ Login failed.");
+                                System.out.println(" Login failed.");
                             }
-                        } catch (IllegalArgumentException e) {
-                            System.out.println("❌ " + e.getMessage());
+                        } catch (application.auth.CustomerAuthService.AuthenticationException e) {
+                            System.out.println("Error: " + e.getMessage());
                         }
                     }
                     case "2" -> {
@@ -84,12 +81,12 @@ public final class POSConsole {
                         String e = readLine(sc);
                         try {
                             if (customerAuth.register(u, p, e)) {
-                                System.out.println("✅ Registration successful. You can now log in.");
+                                System.out.println(" Registration successful. You can now log in.");
                             } else {
-                                System.out.println("❌ Username already taken.");
+                                System.out.println(" Username already taken.");
                             }
-                        } catch (IllegalArgumentException ex) {
-                            System.out.println("❌ " + ex.getMessage());
+                        } catch (application.auth.CustomerAuthService.AuthenticationException ex) {
+                            System.out.println("Error: " + ex.getMessage());
                         }
                     }
                     case "0" -> { return; }
@@ -138,12 +135,12 @@ public final class POSConsole {
                 if (auth.login(user, pass)) {
                     pos.setUser(user);
                     pos.setChannel("POS");
-                    System.out.println("✅ Login successful! Welcome, " + user + ".");
+                    System.out.println(" Login successful! Welcome, " + user + ".");
                 } else {
-                    System.out.println("❌ Login failed. Please try again.\n");
+                    System.out.println(" Login failed. Please try again.\n");
                 }
             } catch (IllegalArgumentException e) {
-                System.out.println("❌ " + e.getMessage());
+                System.out.println("Error " + e.getMessage());
             }
         }
 
@@ -214,16 +211,16 @@ public final class POSConsole {
                         try {
                             // First validate the item exists in the catalog
                             if (!isValidItemCode(code)) {
-                                System.out.println("❌ You can't add item which is not in the item list. Please check the code: " + code);
-                                System.out.println("💡 Type '?' to browse available items or search by name.");
+                                System.out.println(" You can't add item which is not in the item list. Please check the code: " + code);
+                                System.out.println(" Type '?' to browse available items or search by name.");
                                 break;
                             }
 
                             name = inv.itemName(code);
                             price = inv.priceOf(code);
                         } catch (Exception e) {
-                            System.out.println("❌ You can't add item which is not in the item list. Please check the code: " + code);
-                            System.out.println("💡 Type '?' to browse available items or search by name.");
+                            System.out.println("You can't add item which is not in the item list. Please check the code: " + code);
+                            System.out.println(" Type '?' to browse available items or search by name.");
                             break;
                         }
 
@@ -233,7 +230,7 @@ public final class POSConsole {
                         int qty = readInt(sc);
 
                         if (qty <= 0) {
-                            System.out.println("❌ Quantity must be greater than 0.");
+                            System.out.println(" Quantity must be greater than 0.");
                             break;
                         }
 
@@ -244,7 +241,7 @@ public final class POSConsole {
                             int restock = inv.restockLevel(code);
                             int remaining = inv.shelfQty(code) + inv.storeQty(code);
                             if (remaining <= restock) {
-                                System.out.println("🔁 This item hit or fell below the restock level (" + restock + ").");
+                                System.out.println("This item hit or fell below the restock level (" + restock + ").");
                             }
                         } catch (Exception ignored) { }
 
@@ -253,28 +250,50 @@ public final class POSConsole {
                                 int storeLeft = inv.storeQty(code);
                                 if (storeLeft <= 0) {
                                     admin.addBatch(code, null, 0, 100);
-                                    System.out.println("🔄 Store empty — auto top-up 100 from MAIN → STORE.");
+                                    System.out.println(" Store empty — auto top-up 100 from MAIN → STORE.");
                                 }
                             } else {
                                 int shelfLeft = inv.shelfQty(code);
                                 if (shelfLeft <= 0) {
                                     admin.addBatch(code, null, 100, 0);
-                                    System.out.println("🔄 Shelf empty — auto top-up 100 from MAIN → SHELF.");
+                                    System.out.println(" Shelf empty — auto top-up 100 from MAIN → SHELF.");
                                 }
                             }
                         } catch (Exception e) {
-                            System.out.println("⚠️ Auto top-up failed: " + e.getMessage());
+                            System.out.println(" Auto top-up failed: " + e.getMessage());
                         }
                     }
                     case "2" -> {
                         System.out.print("Enter Item Code to remove: ");
                         String code = readLine(sc);
                         pos.removeItem(code);
-                        System.out.println("✅ Item removed.");
+                        System.out.println(" Item removed.");
                     }
                     case "3" -> {
-                        Money t = pos.total();
-                        System.out.println("💰 Current Total: " + t);
+                        // Enhanced total display with discount details
+                        try {
+                            Money total = pos.total();
+                            System.out.println("\n=== BILL SUMMARY ===");
+                            System.out.println("Current Total: LKR " + String.format("%.2f", total.asBigDecimal().doubleValue()));
+
+                            // Show discount information
+                            String discountInfo = pos.getCurrentDiscountInfo();
+                            if (!"No discount applied".equals(discountInfo)) {
+                                System.out.println("💰 " + discountInfo);
+                            }
+
+                            // Show available discounts
+                            var availableDiscounts = pos.getAvailableDiscounts();
+                            if (!availableDiscounts.isEmpty() && !availableDiscounts.get(0).equals("No batch discounts available")) {
+                                System.out.println("\n📋 Available Discounts:");
+                                for (String discount : availableDiscounts) {
+                                    System.out.println("   • " + discount);
+                                }
+                            }
+                            System.out.println("====================");
+                        } catch (Exception e) {
+                            System.out.println("Error calculating total: " + e.getMessage());
+                        }
                     }
                     case "4" -> {
                         if ("ONLINE".equalsIgnoreCase(channel)) {
@@ -283,7 +302,7 @@ public final class POSConsole {
                             System.out.print("Card last 4 digits: ");
                             String last4 = readLine(sc);
                             pos.checkoutCard(last4);
-                            System.out.println("✅ Online checkout complete (Card ****" + last4 + ").");
+                            System.out.println(" Online checkout complete (Card ****" + last4 + ").");
                         } else {
                             checkoutMenu(sc);
                         }
@@ -297,14 +316,14 @@ public final class POSConsole {
                 }
             }
         } catch (Exception ex) {
-            System.out.println("⚠️ Error: " + ex.getMessage());
+            System.out.println(" Error: " + ex.getMessage());
         }
     }
 
     private boolean tryAddWithMainTopUpInteractive(Scanner sc, String channel, String code, int qty) {
         try {
             pos.addItem(code, qty);
-            System.out.println("✅ Item(s) added.");
+            System.out.println(" Item(s) added.");
             return true;
         } catch (IllegalStateException ex) {
             final String msg = ex.getMessage() == null ? "" : ex.getMessage();
@@ -333,19 +352,19 @@ public final class POSConsole {
 
                 try {
                     inv.moveMainToStoreFEFOWithUser(code, toMove, auth.currentUser().username()); // Pass operator username
-                    System.out.println("➡️ Transferred " + toMove + " MAIN → STORE.");
+                    System.out.println(" Transferred " + toMove + " MAIN → STORE.");
                 } catch (Exception mvEx) {
-                    System.out.println("⚠️ Transfer failed: " + mvEx.getMessage());
+                    System.out.println(" Transfer failed: " + mvEx.getMessage());
                     return false;
                 }
 
                 // retry add
                 try {
                     pos.addItem(code, qty);
-                    System.out.println("✅ Item(s) added after transfer.");
+                    System.out.println("Item(s) added after transfer.");
                     return true;
                 } catch (Exception ex2) {
-                    System.out.println("⚠️ Still insufficient after transfer: " + ex2.getMessage());
+                    System.out.println(" Still insufficient after transfer: " + ex2.getMessage());
                     return false;
                 }
             }
@@ -485,13 +504,13 @@ public final class POSConsole {
                     System.out.print("Cash received: ");
                     double amt = readDouble(sc);
                     pos.checkoutCash(amt);
-                    System.out.println("✅ Checkout complete (Cash).");
+                    System.out.println(" Checkout complete (Cash).");
                 }
                 case "0" -> System.out.println("Cancelled.");
                 default -> System.out.println("Invalid choice.");
             }
         } catch (Exception ex) {
-            System.out.println("⚠️ Error: " + ex.getMessage());
+            System.out.println(" Error: " + ex.getMessage());
         }
     }
 
@@ -634,7 +653,7 @@ public final class POSConsole {
                         }
 
                         if (!itemExists) {
-                            System.out.println("❌ Invalid item code. Please choose from the list above.");
+                            System.out.println(" Invalid item code. Please choose from the list above.");
                             break;
                         }
 
@@ -647,11 +666,11 @@ public final class POSConsole {
                         int qst = readInt(sc);
 
                         admin.addBatch(code, exp, qs, qst);
-                        System.out.println("✅ Batch added for item: " + code);
+                        System.out.println(" Batch added for item: " + code);
 
                         // NEW: Prompt for discount when adding batch
                         if (exp != null && exp.isBefore(java.time.LocalDate.now().plusDays(30))) {
-                            System.out.println("⚠️ This batch expires within 30 days.");
+                            System.out.println("This batch expires within 30 days.");
                             System.out.print("Add discount for close expiry? (y/n): ");
                             String addDiscount = readLine(sc).toLowerCase();
                             if ("y".equals(addDiscount) || "yes".equals(addDiscount)) {
@@ -687,12 +706,12 @@ public final class POSConsole {
                         System.out.println("  SHELF=" + shelfBefore + "  STORE=" + storeBefore + "  MAIN=" + mainBefore);
 
                         if (mainBefore <= 0) {
-                            System.out.println("⚠️ No stock in MAIN to move.");
+                            System.out.println(" No stock in MAIN to move.");
                             break;
                         }
                         System.out.print("Qty to move MAIN → STORE (max " + mainBefore + "): ");
                         int q = readInt(sc);
-                        if (q <= 0 || q > mainBefore) { System.out.println("⚠️ Invalid quantity."); break; }
+                        if (q <= 0 || q > mainBefore) { System.out.println(" Invalid quantity."); break; }
 
                         admin.moveMainToStoreFEFO(code, q);
 
@@ -701,7 +720,7 @@ public final class POSConsole {
                         int mainAfter  = inv.mainStoreQty(code);
                         System.out.println("After:");
                         System.out.println("  SHELF=" + shelfAfter + "  STORE=" + storeAfter + "  MAIN=" + mainAfter);
-                        System.out.println("✅ Moved " + q + " MAIN → STORE (FEFO).");
+                        System.out.println("Moved " + q + " MAIN → STORE (FEFO).");
                     }
                     case "6" -> itemCatalogMenu(sc); // <— NEW
                     case "7" -> { // MAIN -> SHELF
@@ -713,12 +732,12 @@ public final class POSConsole {
                         System.out.println("  SHELF=" + shelfBefore + "  STORE=" + storeBefore + "  MAIN=" + mainBefore);
 
                         if (mainBefore <= 0) {
-                            System.out.println("⚠️ No stock in MAIN to move.");
+                            System.out.println("No stock in MAIN to move.");
                             break;
                         }
                         System.out.print("Qty to move MAIN → SHELF (max " + mainBefore + "): ");
                         int q = readInt(sc);
-                        if (q <= 0 || q > mainBefore) { System.out.println("⚠️ Invalid quantity."); break; }
+                        if (q <= 0 || q > mainBefore) { System.out.println("Invalid quantity."); break; }
 
                         admin.moveMainToShelfFEFO(code, q);
 
@@ -727,20 +746,20 @@ public final class POSConsole {
                         int mainAfter  = inv.mainStoreQty(code);
                         System.out.println("After:");
                         System.out.println("  SHELF=" + shelfAfter + "  STORE=" + storeAfter + "  MAIN=" + mainAfter);
-                        System.out.println("✅ Moved " + q + " MAIN → SHELF (FEFO).");
+                        System.out.println("Moved " + q + " MAIN → SHELF (FEFO).");
                     }
                     case "8" -> {
                         System.out.print("Item code: "); String code = readLine(sc);
                         System.out.print("Qty to move STORE → SHELF: "); int q = readInt(sc);
                         admin.moveStoreToShelfFEFO(code, q);
-                        System.out.println("✅ Moved " + q + " STORE → SHELF (FEFO).");
+                        System.out.println("Moved " + q + " STORE → SHELF (FEFO).");
                     }
                     case "9" -> batchDiscountMenu(sc); // NEW
                     case "0" -> loop = false;
                     default -> System.out.println("Invalid choice.");
                 }
             } catch (Exception ex) {
-                System.out.println("⚠️ Error: " + ex.getMessage());
+                System.out.println("Error: " + ex.getMessage());
             }
         }
     }
@@ -763,7 +782,7 @@ public final class POSConsole {
                         System.out.print("Name: "); String name = readLine(sc);
                         System.out.print("Unit price: "); double price = readDouble(sc);
                         admin.addNewItem(code, name, domain.common.Money.of(price));
-                        System.out.println("✅ Item added to catalog.");
+                        System.out.println("Item added to catalog.");
                     }
                     case "2" -> {
                         System.out.print("Item code to update: "); String code = readLine(sc);
@@ -772,12 +791,12 @@ public final class POSConsole {
 
                     if (!name.isBlank()) admin.renameItem(code, name);
                         if (price > 0) admin.setItemPrice(code, domain.common.Money.of(price));
-                        System.out.println("✅ Item updated.");
+                        System.out.println("Item updated.");
                     }
                     case "3" -> {
                         System.out.print("Item code to delete: "); String code = readLine(sc);
                         admin.deleteItem(code);
-                        System.out.println("✅ Item deleted.");
+                        System.out.println("Item deleted.");
                     }
                     case "4" -> {
                         var items = inv.listAllItems();
@@ -792,7 +811,7 @@ public final class POSConsole {
                     default -> System.out.println("Invalid choice.");
                 }
             } catch (Exception ex) {
-                System.out.println("⚠️ Error: " + ex.getMessage());
+                System.out.println("Error: " + ex.getMessage());
             }
         }
     }
@@ -902,7 +921,7 @@ public final class POSConsole {
             System.out.println("\nTotal active discounts: " + discounts.size());
 
         } catch (Exception e) {
-            System.out.println("❌ Failed to retrieve discounts: " + e.getMessage());
+            System.out.println(" Failed to retrieve discounts: " + e.getMessage());
         }
     }
 
@@ -919,15 +938,15 @@ public final class POSConsole {
 
             if ("y".equals(confirm) || "yes".equals(confirm)) {
                 admin.removeBatchDiscount(discountId);
-                System.out.println("✅ Discount " + discountId + " removed successfully");
+                System.out.println(" Discount " + discountId + " removed successfully");
             } else {
-                System.out.println("❌ Discount removal cancelled");
+                System.out.println("Discount removal cancelled");
             }
 
         } catch (NumberFormatException e) {
-            System.out.println("❌ Invalid discount ID format");
+            System.out.println("Invalid discount ID format");
         } catch (Exception e) {
-            System.out.println("❌ Failed to remove discount: " + e.getMessage());
+            System.out.println(" Failed to remove discount: " + e.getMessage());
         }
     }
 
@@ -939,7 +958,7 @@ public final class POSConsole {
             System.out.print("Discount percentage (0-100): ");
             double percent = readDouble(sc);
             if (percent <= 0 || percent > 100) {
-                System.out.println("❌ Percentage must be between 0 and 100");
+                System.out.println("Percentage must be between 0 and 100");
                 return;
             }
 
@@ -947,14 +966,15 @@ public final class POSConsole {
 
             admin.addBatchDiscount(batchId, domain.inventory.BatchDiscount.DiscountType.PERCENTAGE,
                                  Money.of(percent), finalReason, auth.currentUser().username());
-            System.out.println("✅ " + percent + "% discount added to batch " + batchId);
+            System.out.println("Done " + percent + "% discount added to batch " + batchId);
 
         } catch (NumberFormatException e) {
-            System.out.println("❌ Invalid number format");
+            System.out.println(" Invalid number format");
         } catch (Exception e) {
-            System.out.println("❌ Failed to add discount: " + e.getMessage());
+            System.out.println(" Failed to add discount: " + e.getMessage());
         }
     }
+
 
     private static String readLine(Scanner sc) {
         String s = sc.nextLine();

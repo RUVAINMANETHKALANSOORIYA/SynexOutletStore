@@ -1,8 +1,7 @@
 package integration;
 
-import application.events.SimpleEventBus;
 import application.inventory.InventoryAdminService;
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 import application.inventory.FefoBatchSelector;
 import application.pos.POSController;
 import application.pricing.PricingService;
@@ -23,7 +22,6 @@ import ports.out.InventoryRepository;
 
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -243,9 +241,27 @@ class POSWorkflowIntegrationTest {
 
     class TestBillRepository implements BillRepository {
         @Override
-        public void save(Bill bill) {
+        public String createBill() { return "TEST-BILL-001"; }
+
+        @Override
+        public void saveBill(Bill bill) {
             savedBills.add(bill);
         }
+
+        @Override
+        public Optional<Bill> findBill(String billId) { return Optional.empty(); }
+
+        @Override
+        public void savePaidBill(domain.billing.Receipt receipt) { /* unused in tests */ }
+
+        @Override
+        public List<Bill> findOpenBills() { return List.of(); }
+
+        @Override
+        public List<domain.billing.Receipt> findReceiptsByDate(java.time.LocalDate date) { return List.of(); }
+
+        @Override
+        public void deleteBill(String billId) { /* unused in tests */ }
     }
 
     static class TestBillWriter implements BillWriter {

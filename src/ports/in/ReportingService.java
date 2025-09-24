@@ -1,4 +1,7 @@
-package application.reporting;
+package ports.in;
+
+import application.reporting.ReportPrinter;
+import application.reporting.ReportRepository;
 
 import java.time.LocalDate;
 import java.util.List;

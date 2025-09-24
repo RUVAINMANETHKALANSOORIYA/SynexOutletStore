@@ -8,6 +8,7 @@ import domain.pricing.CompositeDiscount;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import ports.in.InventoryService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,11 +18,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class PricingServiceTest {
 
     private PricingService pricingService;
-    private application.inventory.InventoryService inventoryService;
+    private InventoryService inventoryService;
 
     @BeforeEach
     void setup() {
-        inventoryService = new application.inventory.InventoryService(new FakeInventoryRepository(), new application.inventory.FefoBatchSelector());
+        inventoryService = new InventoryService(new FakeInventoryRepository(), new application.inventory.FefoBatchSelector());
         pricingService = new PricingService(13.5, inventoryService);
     }
 

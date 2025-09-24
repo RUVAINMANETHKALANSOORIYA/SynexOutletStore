@@ -3,7 +3,7 @@ package application.pricing;
 import domain.billing.Bill;
 import domain.common.Money;
 import domain.pricing.DiscountPolicy;
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 
 
 public final class PricingService {

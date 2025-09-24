@@ -7,7 +7,7 @@ import domain.billing.BillWriter;
 import domain.common.Money;
 import domain.inventory.InventoryReservation;
 import domain.inventory.BatchDiscount; // Add this import
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 import application.inventory.InventoryAdminService;
 import domain.payment.CashPayment;
 import domain.payment.CardPayment;
@@ -149,10 +149,15 @@ public final class POSController {
         if (batchDiscount != null) {
             activeDiscount = batchDiscount;
 
-            // Calculate the actual discount amount for display by comparing original vs current prices
-            Money actualDiscount = calculateActualBatchDiscountAmount();
-            if (actualDiscount.compareTo(Money.ZERO) > 0) {
-                System.out.println("🎉 Batch Discount Applied - You save: " + actualDiscount);
+            // Calculate and display the total discount amount for the most recently added line
+            BillLine lastLine = active.lines().get(active.lines().size() - 1);
+            Money originalLineTotal = inventory.priceOf(lastLine.itemCode()).multiply(lastLine.quantity());
+            Money discountedLineTotal = lastLine.lineTotal();
+            Money lineSavings = originalLineTotal.minus(discountedLineTotal);
+
+            if (lineSavings.compareTo(Money.ZERO) > 0) {
+                System.out.println("🎉 Batch Discount Applied - Total savings for " + lastLine.quantity() +
+                    " items: LKR " + String.format("%.2f", lineSavings.asBigDecimal().doubleValue()));
             }
         }
     }
@@ -241,7 +246,7 @@ public final class POSController {
         active.setUserName(currentUser);
         active.setChannel(currentChannel);
 
-        bills.save(active);
+        bills.saveBill(active);
         writer.write(active);
 
         if (!shelfReservations.isEmpty()) inventory.commitReservation(shelfReservations);
@@ -290,20 +295,46 @@ public final class POSController {
 
         // Apply batch discounts only for in-store POS channel
         if (!"POS".equalsIgnoreCase(currentChannel)) {
+            System.out.println("⚠️ Batch discounts only apply to POS channel. Current channel: " + currentChannel);
             return basePrice;
         }
 
         // If no inventory admin service available (backward compatibility), use base price
         if (inventoryAdmin == null) {
+            System.out.println("⚠️ InventoryAdminService not available - no batch discounts");
             return basePrice;
         }
 
+        System.out.println("🔍 Checking batch discounts for item: " + itemCode + " (Base price: LKR " +
+            String.format("%.2f", basePrice.asBigDecimal().doubleValue()) + ")");
+
         // Check each batch for discounts and find the best price
+        boolean foundDiscount = false;
+        Money maxSavingsPerItem = Money.ZERO;
+
         for (InventoryReservation reservation : reservations) {
+            System.out.println("   Checking batch ID: " + reservation.batchId);
             Money batchPrice = inventoryAdmin.calculateDiscountedPrice(itemCode, reservation.batchId);
+
             if (batchPrice.compareTo(bestPrice) < 0) {
+                Money savings = basePrice.minus(batchPrice);  // Calculate savings from original base price
+                if (savings.compareTo(maxSavingsPerItem) > 0) {
+                    maxSavingsPerItem = savings;
+                }
                 bestPrice = batchPrice;
+                foundDiscount = true;
+                System.out.println("   ✅ Discounted price found: LKR " +
+                    String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) +
+                    " (Save: LKR " + String.format("%.2f", savings.asBigDecimal().doubleValue()) + " per item)");
+            } else {
+                System.out.println("   ❌ No discount for batch " + reservation.batchId +
+                    " (Price: LKR " + String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) + ")");
             }
+        }
+
+        // Only show discount info if found, but don't duplicate the message that will be shown later
+        if (!foundDiscount) {
+            System.out.println("ℹ️ No batch discounts available for " + itemCode);
         }
 
         return bestPrice;

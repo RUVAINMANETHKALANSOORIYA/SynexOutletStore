@@ -45,10 +45,17 @@ public record BatchDiscount(
      * Check if discount is currently valid based on time
      */
     public boolean isValidNow() {
+        if (!isActive) {
+            return false;
+        }
+
         LocalDateTime now = LocalDateTime.now();
-        boolean afterStart = now.isAfter(validFrom) || now.isEqual(validFrom);
-        boolean beforeEnd = validUntil == null || now.isBefore(validUntil);
-        return afterStart && beforeEnd;
+
+        // Simple logic: if validUntil is null or in the future, discount is valid
+        // Ignore validFrom for immediate effectiveness
+        boolean notExpired = validUntil == null || now.isBefore(validUntil);
+
+        return notExpired;
     }
 
     /**

@@ -1,11 +1,10 @@
 package application.pos;
 
 import application.events.EventBus;
-import application.inventory.InventoryService;
+import ports.in.InventoryService;
 import application.inventory.InventoryAdminService;
 import application.pricing.PricingService;
 import domain.billing.Bill;
-import domain.billing.BillLine;
 import domain.billing.BillNumberGenerator;
 import domain.billing.BillWriter;
 import domain.common.Money;
@@ -347,7 +346,28 @@ class BatchDiscountPOSTest {
     }
 
     static final class FakeBillRepo implements BillRepository {
-        Bill saved; @Override public void save(Bill bill) { this.saved = bill; }
+        Bill saved;
+
+        @Override
+        public String createBill() { return "TEST-BILL-001"; }
+
+        @Override
+        public void saveBill(Bill bill) { this.saved = bill; }
+
+        @Override
+        public Optional<Bill> findBill(String billId) { return Optional.ofNullable(saved); }
+
+        @Override
+        public void savePaidBill(domain.billing.Receipt receipt) { /* unused in tests */ }
+
+        @Override
+        public List<Bill> findOpenBills() { return saved != null ? List.of(saved) : List.of(); }
+
+        @Override
+        public List<domain.billing.Receipt> findReceiptsByDate(java.time.LocalDate date) { return List.of(); }
+
+        @Override
+        public void deleteBill(String billId) { if (saved != null && saved.number().equals(billId)) saved = null; }
     }
 
     static final class FakeBillWriter implements BillWriter {

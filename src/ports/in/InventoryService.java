@@ -1,5 +1,7 @@
-package application.inventory;
+package ports.in;
 
+import application.inventory.BatchSelector;
+import application.inventory.FefoBatchSelector;
 import domain.common.Money;
 import domain.inventory.Batch;
 import domain.inventory.InventoryReservation;

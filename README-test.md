@@ -12,10 +12,10 @@ Structure
 
 Key Test Areas
 - application.pos.POSController: end-to-end controller behaviors (new bill, add/remove items, smart reservations, payments, checkout, events, state reset). 
-- application.inventory.InventoryService: FEFO selections, smart reservation branches, quantity helpers, and movement operations. 
+- ports.in.InventoryService: FEFO selections, smart reservation branches, quantity helpers, and movement operations. 
 - application.pricing.PricingService: subtotal, discounts (capped), taxes, rounding. 
 - domain.billing.Bill & BillLine: state transitions (Draft→Paid) and rendering. 
-- application.auth.AuthService & CustomerAuthService: login/registration flows. 
+- ports.in.AuthService & CustomerAuthService: login/registration flows. 
 - application.events: SimpleEventBus publish/subscribe and Noop behavior. 
 - infrastructure.security.PermissionCheckedInventoryRepository: guards for MAIN transfers.
 - domain.spec.inventory utilities and specification combinators.

@@ -656,9 +656,14 @@ public final class JdbcInventoryRepository implements InventoryRepository {
         try (Connection c = Db.get();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, batchId);
+
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return Optional.empty();
-                return Optional.of(mapBatchDiscount(rs));
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                
+                BatchDiscount discount = mapBatchDiscount(rs);
+                return Optional.of(discount);
             }
         } catch (SQLException e) {
             throw new RuntimeException("findActiveBatchDiscount failed", e);

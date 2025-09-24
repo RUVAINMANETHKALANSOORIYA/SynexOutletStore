@@ -1,4 +1,4 @@
-package application.auth;
+package ports.in;
 
 import domain.auth.PasswordHash;
 import domain.auth.User;
@@ -13,7 +13,6 @@ public final class AuthService {
     public AuthService(UserRepository users) { this.users = users; }
 
     public boolean login(String username, String password) {
-        // Validate username - no numbers allowed
         if (username == null || username.trim().isEmpty()) {
             return false;
         }
