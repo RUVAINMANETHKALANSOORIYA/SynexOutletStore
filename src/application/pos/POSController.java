@@ -26,6 +26,7 @@ import application.events.events.StockDepleted;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -92,46 +93,90 @@ public final class POSController {
 
     public void addItem(String code, int qty) {
         ensure();
-        var res = inventory.reserveByChannel(code, qty, currentChannel);
-        if ("POS".equalsIgnoreCase(currentChannel)) {
-            storeReservations.addAll(res);
-        } else {
-            shelfReservations.addAll(res);
+
+        // Input validation
+        validateItemCode(code);
+        validateQuantity(qty);
+
+        // Inventory validation - check if item exists
+        validateItemExists(code);
+
+        // Check available stock before attempting reservation
+        validateStockAvailability(code, qty);
+
+        try {
+            var res = inventory.reserveByChannel(code, qty, currentChannel);
+            if ("POS".equalsIgnoreCase(currentChannel)) {
+                storeReservations.addAll(res);
+            } else {
+                shelfReservations.addAll(res);
+            }
+
+            // Calculate the best price considering batch discounts
+            Money effectivePrice = calculateBestPriceFromReservations(code, res);
+
+            var line = new BillLine(code, inventory.itemName(code), effectivePrice, qty, res);
+            active.addLine(line);
+
+            // Auto-detect and apply the best available discount after adding the item
+            autoApplyBestDiscount();
+        } catch (IllegalStateException e) {
+            // Handle insufficient stock or reservation failures
+            throw new POSOperationException("Insufficient stock for item " + code + ": " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            // Handle other inventory service exceptions
+            throw new POSOperationException("Inventory operation failed for item " + code + ": " + e.getMessage(), e);
+        } catch (Exception e) {
+            // Handle any unexpected exceptions
+            throw new POSOperationException("Failed to add item " + code + " to bill: " + e.getMessage(), e);
         }
-
-        // Calculate the best price considering batch discounts
-        Money effectivePrice = calculateBestPriceFromReservations(code, res);
-
-        var line = new BillLine(code, inventory.itemName(code), effectivePrice, qty, res);
-        active.addLine(line);
-
-        // Auto-detect and apply the best available discount after adding the item
-        autoApplyBestDiscount();
     }
 
     public InventoryService.SmartPick addItemSmart(String code, int qty,
                                                    boolean approveUseOtherSide,
                                                    boolean managerApprovedBackfill) {
         ensure();
-        var pick = inventory.reserveSmart(code, qty, currentChannel, approveUseOtherSide, managerApprovedBackfill);
 
-        shelfReservations.addAll(pick.shelfReservations);
-        storeReservations.addAll(pick.storeReservations);
+        // Input validation
+        validateItemCode(code);
+        validateQuantity(qty);
+        validateBooleanParameters(approveUseOtherSide, managerApprovedBackfill);
 
-        var combined = new ArrayList<InventoryReservation>(pick.shelfReservations.size() + pick.storeReservations.size());
-        combined.addAll(pick.shelfReservations);
-        combined.addAll(pick.storeReservations);
+        // Inventory validation - check if item exists
+        validateItemExists(code);
 
-        // Calculate the best price considering batch discounts
-        Money effectivePrice = calculateBestPriceFromReservations(code, combined);
+        // Note: For smart pick, we don't validate stock availability upfront since it may use cross-channel logic
 
-        var line = new BillLine(code, inventory.itemName(code), effectivePrice, qty, combined);
-        active.addLine(line);
+        try {
+            var pick = inventory.reserveSmart(code, qty, currentChannel, approveUseOtherSide, managerApprovedBackfill);
 
-        // Auto-detect and apply the best available discount after adding the item
-        autoApplyBestDiscount();
+            shelfReservations.addAll(pick.shelfReservations);
+            storeReservations.addAll(pick.storeReservations);
 
-        return pick;
+            var combined = new ArrayList<InventoryReservation>(pick.shelfReservations.size() + pick.storeReservations.size());
+            combined.addAll(pick.shelfReservations);
+            combined.addAll(pick.storeReservations);
+
+            // Calculate the best price considering batch discounts
+            Money effectivePrice = calculateBestPriceFromReservations(code, combined);
+
+            var line = new BillLine(code, inventory.itemName(code), effectivePrice, qty, combined);
+            active.addLine(line);
+
+            // Auto-detect and apply the best available discount after adding the item
+            autoApplyBestDiscount();
+
+            return pick;
+        } catch (IllegalStateException e) {
+            // Handle insufficient stock or reservation failures
+            throw new POSOperationException("Smart pick failed for item " + code + ": " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            // Handle other inventory service exceptions
+            throw new POSOperationException("Inventory operation failed for item " + code + " using smart pick: " + e.getMessage(), e);
+        } catch (Exception e) {
+            // Handle any unexpected exceptions
+            throw new POSOperationException("Failed to add item " + code + " using smart pick: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -200,80 +245,192 @@ public final class POSController {
 
     public void payCash(double amount) {
         ensure();
-        pricing.finalizePricing(active, activeDiscount);
-        var cash = new CashPayment();
-        this.paymentReceipt = cash.pay(active.total(), Money.of(amount));
-        active.setPayment(paymentReceipt);
+        ensureItemsAdded();
+
+        // Payment validation
+        validateCashAmount(amount);
+
+        try {
+            pricing.finalizePricing(active, activeDiscount);
+            Money billTotal = active.total();
+
+            // Validate sufficient payment amount
+            if (Money.of(amount).compareTo(billTotal) < 0) {
+                throw new POSOperationException("Insufficient payment amount. Bill total: " + billTotal + ", Payment: LKR " + String.format("%.2f", amount));
+            }
+
+            var cash = new CashPayment();
+            this.paymentReceipt = cash.pay(billTotal, Money.of(amount));
+            active.setPayment(paymentReceipt);
+        } catch (POSOperationException e) {
+            throw e; // Re-throw our validation exceptions
+        } catch (Exception e) {
+            throw new POSOperationException("Cash payment processing failed: " + e.getMessage(), e);
+        }
     }
 
     public void payCard(String last4) {
         ensure();
-        pricing.finalizePricing(active, activeDiscount);
-        var card = new CardPayment(last4);
-        this.paymentReceipt = card.pay(active.total(), active.total());
-        active.setPayment(paymentReceipt);
+        ensureItemsAdded();
+
+        // Payment validation
+        validateCardNumber(last4);
+
+        try {
+            pricing.finalizePricing(active, activeDiscount);
+            var card = new CardPayment(last4);
+            this.paymentReceipt = card.pay(active.total(), active.total());
+            active.setPayment(paymentReceipt);
+        } catch (IllegalArgumentException e) {
+            // Handle card processing errors (declined cards, invalid format, etc.)
+            throw new POSOperationException("Card payment declined or invalid: " + e.getMessage(), e);
+        } catch (Exception e) {
+            // Handle any payment processing failures
+            throw new POSOperationException("Card payment processing failed: " + e.getMessage(), e);
+        }
     }
 
     public void checkoutCash(double amount) {
         ensure();
         ensureItemsAdded();
-        pricing.finalizePricing(active, activeDiscount);
-        var cash = new CashPayment();
-        this.paymentReceipt = cash.pay(active.total(), Money.of(amount));
-        active.setPayment(paymentReceipt);
-        persistAndReset();
+
+        // Payment validation
+        validateCashAmount(amount);
+
+        try {
+            pricing.finalizePricing(active, activeDiscount);
+            Money billTotal = active.total();
+
+            // Validate sufficient payment amount
+            if (Money.of(amount).compareTo(billTotal) < 0) {
+                throw new POSOperationException("Insufficient payment amount. Bill total: " + billTotal + ", Payment: LKR " + String.format("%.2f", amount));
+            }
+
+            var cash = new CashPayment();
+            this.paymentReceipt = cash.pay(billTotal, Money.of(amount));
+            active.setPayment(paymentReceipt);
+            persistAndReset();
+        } catch (POSOperationException e) {
+            throw e; // Re-throw our validation exceptions
+        } catch (Exception e) {
+            throw new POSOperationException("Cash checkout failed: " + e.getMessage(), e);
+        }
     }
 
     public void checkoutCard(String last4) {
         ensure();
         ensureItemsAdded();
-        pricing.finalizePricing(active, activeDiscount);
-        var card = new CardPayment(last4);
-        this.paymentReceipt = card.pay(active.total(), active.total());
-        active.setPayment(paymentReceipt);
-        persistAndReset();
+
+        // Payment validation
+        validateCardNumber(last4);
+
+        try {
+            pricing.finalizePricing(active, activeDiscount);
+            var card = new CardPayment(last4);
+            this.paymentReceipt = card.pay(active.total(), active.total());
+            active.setPayment(paymentReceipt);
+            persistAndReset();
+        } catch (IllegalArgumentException e) {
+            // Handle card processing errors (declined cards, invalid format, etc.)
+            throw new POSOperationException("Card payment declined or invalid: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new POSOperationException("Card checkout failed: " + e.getMessage(), e);
+        }
     }
 
     public void checkout() {
         ensure();
         ensureItemsAdded();
-        pricing.finalizePricing(active, activeDiscount);
-        if (paymentReceipt == null) throw new IllegalStateException("Payment not completed");
-        persistAndReset();
+
+        if (paymentReceipt == null) {
+            throw new POSOperationException("Payment not completed. Please process payment before checkout");
+        }
+
+        try {
+            pricing.finalizePricing(active, activeDiscount);
+            persistAndReset();
+        } catch (Exception e) {
+            throw new POSOperationException("Checkout failed: " + e.getMessage(), e);
+        }
     }
 
     private void persistAndReset() {
-        active.setUserName(currentUser);
-        active.setChannel(currentChannel);
+        try {
+            active.setUserName(currentUser);
+            active.setChannel(currentChannel);
 
-        bills.saveBill(active);
-        writer.write(active);
-
-        if (!shelfReservations.isEmpty()) inventory.commitReservation(shelfReservations);
-        if (!storeReservations.isEmpty()) inventory.commitStoreReservation(storeReservations);
-
-        events.publish(new BillPaid(active.number(), active.total(), currentChannel, currentUser));
-
-        // dedupe item codes in this bill
-        Set<String> codes = new LinkedHashSet<>();
-        for (BillLine l : active.lines()) codes.add(l.itemCode());
-        for (String code : codes) {
-            int shelf = inventory.shelfQty(code);
-            int store = inventory.storeQty(code);
-            int totalLeft = shelf + store;
-            int threshold = Math.max(50, inventory.restockLevel(code));
-            if (totalLeft == 0) {
-                events.publish(new StockDepleted(code));
-            } else if (totalLeft <= threshold) {
-                events.publish(new RestockThresholdHit(code, totalLeft, threshold));
+            // Database operations with error handling
+            try {
+                bills.saveBill(active);
+            } catch (Exception e) {
+                throw new POSOperationException("Failed to save bill to database: " + e.getMessage(), e);
             }
-        }
 
-        active = null;
-        shelfReservations.clear();
-        storeReservations.clear();
-        activeDiscount = null;
-        paymentReceipt = null;
+            try {
+                writer.write(active);
+            } catch (Exception e) {
+                throw new POSOperationException("Failed to write bill receipt: " + e.getMessage(), e);
+            }
+
+            // Inventory commitment operations with error handling
+            try {
+                if (!shelfReservations.isEmpty()) inventory.commitReservation(shelfReservations);
+            } catch (Exception e) {
+                throw new POSOperationException("Failed to commit shelf reservations: " + e.getMessage(), e);
+            }
+
+            try {
+                if (!storeReservations.isEmpty()) inventory.commitStoreReservation(storeReservations);
+            } catch (Exception e) {
+                throw new POSOperationException("Failed to commit store reservations: " + e.getMessage(), e);
+            }
+
+            // Event publication with error handling
+            try {
+                events.publish(new BillPaid(active.number(), active.total(), currentChannel, currentUser));
+            } catch (Exception e) {
+                // Log the error but don't fail the checkout - bill is already saved
+                System.err.println("Warning: Failed to publish BillPaid event: " + e.getMessage());
+            }
+
+            // Stock level events with error handling
+            try {
+                Set<String> codes = new LinkedHashSet<>();
+                for (BillLine l : active.lines()) codes.add(l.itemCode());
+                for (String code : codes) {
+                    try {
+                        int shelf = inventory.shelfQty(code);
+                        int store = inventory.storeQty(code);
+                        int totalLeft = shelf + store;
+                        int threshold = Math.max(50, inventory.restockLevel(code));
+
+                        if (totalLeft == 0) {
+                            events.publish(new StockDepleted(code));
+                        } else if (totalLeft <= threshold) {
+                            events.publish(new RestockThresholdHit(code, totalLeft, threshold));
+                        }
+                    } catch (Exception e) {
+                        // Log individual item stock check failures but continue with others
+                        System.err.println("Warning: Failed to check stock levels for item " + code + ": " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                // Log the error but don't fail the checkout
+                System.err.println("Warning: Failed to process stock level events: " + e.getMessage());
+            }
+
+            // Reset state - this should always succeed
+            active = null;
+            shelfReservations.clear();
+            storeReservations.clear();
+            activeDiscount = null;
+            paymentReceipt = null;
+
+        } catch (POSOperationException e) {
+            throw e; // Re-throw our specific exceptions
+        } catch (Exception e) {
+            throw new POSOperationException("Critical error during checkout process: " + e.getMessage(), e);
+        }
     }
 
     private void ensure() {
@@ -290,7 +447,29 @@ public final class POSController {
      * Calculate the best (lowest) price from all reserved batches, considering any active discounts
      */
     private Money calculateBestPriceFromReservations(String itemCode, List<InventoryReservation> reservations) {
-        Money basePrice = inventory.priceOf(itemCode);
+        // Validate input parameters
+        if (itemCode == null || itemCode.trim().isEmpty()) {
+            throw new POSOperationException("Item code cannot be null or empty for price calculation");
+        }
+
+        if (reservations == null) {
+            throw new POSOperationException("Reservations list cannot be null for price calculation");
+        }
+
+        if (reservations.isEmpty()) {
+            System.out.println("⚠️ No reservations available for item " + itemCode + ", using base price");
+        }
+
+        Money basePrice;
+        try {
+            basePrice = inventory.priceOf(itemCode);
+            if (basePrice == null) {
+                throw new POSOperationException("Base price for item " + itemCode + " is null");
+            }
+        } catch (Exception e) {
+            throw new POSOperationException("Failed to get base price for item " + itemCode + ": " + e.getMessage(), e);
+        }
+
         Money bestPrice = basePrice;
 
         // Apply batch discounts only for in-store POS channel
@@ -305,6 +484,11 @@ public final class POSController {
             return basePrice;
         }
 
+        // If no reservations, return base price
+        if (reservations.isEmpty()) {
+            return basePrice;
+        }
+
         System.out.println("🔍 Checking batch discounts for item: " + itemCode + " (Base price: LKR " +
             String.format("%.2f", basePrice.asBigDecimal().doubleValue()) + ")");
 
@@ -313,22 +497,39 @@ public final class POSController {
         Money maxSavingsPerItem = Money.ZERO;
 
         for (InventoryReservation reservation : reservations) {
-            System.out.println("   Checking batch ID: " + reservation.batchId);
-            Money batchPrice = inventoryAdmin.calculateDiscountedPrice(itemCode, reservation.batchId);
+            if (reservation == null) {
+                System.err.println("Warning: Null reservation found for item " + itemCode + ", skipping");
+                continue;
+            }
 
-            if (batchPrice.compareTo(bestPrice) < 0) {
-                Money savings = basePrice.minus(batchPrice);  // Calculate savings from original base price
-                if (savings.compareTo(maxSavingsPerItem) > 0) {
-                    maxSavingsPerItem = savings;
+            try {
+                System.out.println("   Checking batch ID: " + reservation.batchId);
+                Money batchPrice = inventoryAdmin.calculateDiscountedPrice(itemCode, reservation.batchId);
+
+                if (batchPrice == null) {
+                    System.err.println("Warning: Null price returned for batch " + reservation.batchId + ", using base price");
+                    continue;
                 }
-                bestPrice = batchPrice;
-                foundDiscount = true;
-                System.out.println("   ✅ Discounted price found: LKR " +
-                    String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) +
-                    " (Save: LKR " + String.format("%.2f", savings.asBigDecimal().doubleValue()) + " per item)");
-            } else {
-                System.out.println("   ❌ No discount for batch " + reservation.batchId +
-                    " (Price: LKR " + String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) + ")");
+
+                if (batchPrice.compareTo(bestPrice) < 0) {
+                    Money savings = basePrice.minus(batchPrice);  // Calculate savings from original base price
+                    if (savings.compareTo(maxSavingsPerItem) > 0) {
+                        maxSavingsPerItem = savings;
+                    }
+                    bestPrice = batchPrice;
+                    foundDiscount = true;
+                    System.out.println("   ✅ Discounted price found: LKR " +
+                        String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) +
+                        " (Save: LKR " + String.format("%.2f", savings.asBigDecimal().doubleValue()) + " per item)");
+                } else {
+                    System.out.println("   ❌ No discount for batch " + reservation.batchId +
+                        " (Price: LKR " + String.format("%.2f", batchPrice.asBigDecimal().doubleValue()) + ")");
+                }
+            } catch (Exception e) {
+                System.err.println("Warning: Failed to calculate discount for batch " + reservation.batchId +
+                    " for item " + itemCode + ": " + e.getMessage());
+                // Continue with other reservations instead of failing completely
+                continue;
             }
         }
 
@@ -432,5 +633,115 @@ public final class POSController {
         }
 
         return summary.toString();
+    }
+
+    /**
+     * Validates item code input
+     */
+    private void validateItemCode(String code) {
+        if (code == null) {
+            throw new POSOperationException("Item code cannot be null");
+        }
+        if (code.trim().isEmpty()) {
+            throw new POSOperationException("Item code cannot be empty");
+        }
+        // Additional validation: check for valid format (alphanumeric with possible special characters)
+        if (!code.matches("^[A-Za-z0-9_-]+$")) {
+            throw new POSOperationException("Item code contains invalid characters. Only letters, numbers, underscore and hyphen are allowed");
+        }
+    }
+
+    /**
+     * Validates quantity input
+     */
+    private void validateQuantity(int qty) {
+        if (qty <= 0) {
+            throw new POSOperationException("Quantity must be greater than zero. Provided: " + qty);
+        }
+        if (qty > 10000) {
+            throw new POSOperationException("Quantity too large. Maximum allowed: 10000. Provided: " + qty);
+        }
+    }
+
+    /**
+     * Validates boolean parameters for addItemSmart method
+     */
+    private void validateBooleanParameters(boolean approveUseOtherSide, boolean managerApprovedBackfill) {
+        // Boolean parameters are inherently valid, but we can add business logic validation
+        // For example, manager approval might require certain conditions
+        if (managerApprovedBackfill && !approveUseOtherSide) {
+            throw new POSOperationException("Manager approved backfill requires approval to use other side");
+        }
+    }
+
+    /**
+     * Validates if an item exists in the inventory
+     */
+    private void validateItemExists(String code) {
+        try {
+            // Try to get item name - this will throw NoSuchElementException if item doesn't exist
+            inventory.itemName(code);
+        } catch (NoSuchElementException e) {
+            throw new POSOperationException("Item " + code + " does not exist in inventory");
+        }
+    }
+
+    /**
+     * Validates if there is enough stock available for the requested quantity
+     */
+    private void validateStockAvailability(String code, int qty) {
+        int availableStock;
+        if ("POS".equalsIgnoreCase(currentChannel)) {
+            // For POS channel, check store quantity
+            availableStock = inventory.storeQty(code);
+        } else {
+            // For other channels (like ONLINE), check shelf quantity
+            availableStock = inventory.shelfQty(code);
+        }
+
+        if (availableStock < qty) {
+            throw new POSOperationException("Not enough stock available for item " + code + ". Requested: " + qty + ", Available: " + availableStock);
+        }
+    }
+
+    /**
+     * Validates the cash payment amount
+     */
+    private void validateCashAmount(double amount) {
+        if (amount <= 0) {
+            throw new POSOperationException("Cash amount must be greater than zero. Provided: " + amount);
+        }
+        if (amount > 100000) {
+            throw new POSOperationException("Cash amount too large. Maximum allowed: 100000. Provided: " + amount);
+        }
+    }
+
+    /**
+     * Validates the card number format (last 4 digits)
+     */
+    private void validateCardNumber(String last4) {
+        if (last4 == null) {
+            throw new POSOperationException("Card number cannot be null");
+        }
+        if (last4.trim().isEmpty()) {
+            throw new POSOperationException("Card number cannot be empty");
+        }
+        // Additional validation: check for valid format (4 digits)
+        if (!last4.matches("^\\d{4}$")) {
+            throw new POSOperationException("Card number must be 4 digits");
+        }
+    }
+
+    /**
+     * Custom exception for POS operations
+     */
+    public static class POSOperationException extends RuntimeException {
+        public POSOperationException(String message) {
+            super(message);
+        }
+
+        public POSOperationException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }
