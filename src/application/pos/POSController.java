@@ -3,6 +3,11 @@ package application.pos;
 import domain.billing.Bill;
 import domain.billing.BillLine;
 import domain.billing.BillNumberGenerator;
+import domain.billing.composite.BillComponent;
+import domain.billing.composite.BillComposite;
+import domain.billing.composite.BillLineComponent;
+import domain.billing.state.BillState;
+import domain.billing.state.EmptyState;
 import domain.common.Money;
 import domain.inventory.InventoryReservation;
 import ports.in.InventoryService;
@@ -15,6 +20,7 @@ import ports.out.BillRepository;
 import domain.billing.BillWriter;
 import application.events.EventBus;
 import application.events.NoopEventBus;
+import application.pos.patterns.command.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +35,11 @@ public final class POSController {
     private final PricingService pricing;
     private final AutoDiscountService autoDiscountService;
     private final BillNumberGenerator billNos;
+
+    // Design Pattern components
+    private BillState currentState = new EmptyState();
+    private final CommandInvoker commandInvoker = new CommandInvoker();
+    private BillComposite billComposite;
 
     // Bill state
     private Bill active = null;
@@ -164,6 +175,15 @@ public final class POSController {
         autoApplyBestDiscount();
     }
 
+    // Overloaded method for quantity-based removal (for Command pattern)
+    public void removeItem(String code, int qty) {
+        ensure();
+        // For now, remove the entire line regardless of quantity
+        // In a more sophisticated implementation, you could reduce the quantity
+        active.removeLineByCode(code);
+        autoApplyBestDiscount();
+    }
+
     public void applyDiscount(DiscountPolicy p) {
         ensure();
         activeDiscount = p;
@@ -251,6 +271,76 @@ public final class POSController {
         storeReservations.clear();
         activeDiscount = null;
         paymentReceipt = null;
+    }
+
+    // State Pattern methods
+    public void changeState(BillState newState) {
+        this.currentState = newState;
+    }
+
+    public String getCurrentStateName() {
+        return currentState.getStateName();
+    }
+
+    // Command Pattern methods
+    public void executeCommand(Command command) {
+        commandInvoker.execute(command);
+    }
+
+    public void doAddItem(String code, int qty) {
+        Command addCommand = new AddItemCommand(this, code, qty);
+        executeCommand(addCommand);
+    }
+
+    public boolean undoLastAction() {
+        return commandInvoker.undo();
+    }
+
+    public boolean redoLastAction() {
+        return commandInvoker.redo();
+    }
+
+    public List<String> getActionHistory() {
+        return commandInvoker.getHistory();
+    }
+
+    // Internal methods for state pattern delegation
+    public void addItemInternal(String code, int qty) {
+        // Delegate to original addItem logic
+        this.addItem(code, qty);
+    }
+
+    public void removeItemInternal(String code, int qty) {
+        this.removeItem(code, qty);
+    }
+
+    public void processPaymentInternal(String method, Object... params) {
+        if ("CASH".equals(method) && params.length > 0) {
+            this.payCash((Double) params[0]);
+        } else if ("CARD".equals(method) && params.length > 0) {
+            this.payCard((String) params[0]);
+        }
+    }
+
+    public void finalizeBillInternal() {
+        this.checkout();
+    }
+
+    public Bill getActiveBill() {
+        return active;
+    }
+
+    // Composite Pattern methods
+    public BillComponent getBillAsComposite() {
+        if (active == null) {
+            return new BillComposite("Empty Bill");
+        }
+
+        BillComposite composite = new BillComposite("Bill " + active.number());
+        for (BillLine line : active.lines()) {
+            composite.addComponent(new BillLineComponent(line));
+        }
+        return composite;
     }
 
     // Helper methods

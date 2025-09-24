@@ -1,88 +1,44 @@
 package application.pos;
 
 import domain.billing.Bill;
-import domain.common.Money;
-import domain.payment.CashPayment;
-import domain.payment.CardPayment;
 import domain.payment.Payment;
 import domain.pricing.DiscountPolicy;
 import application.pricing.PricingService;
+import domain.inventory.strategy.PaymentStrategyContext;
 
 /**
- * Handles all payment processing operations for the POS system
+ * Handles all payment processing operations for the POS system using Strategy pattern
  */
 public final class PaymentProcessor {
-    private final PricingService pricing;
+    private final PaymentStrategyContext strategyContext;
 
     public PaymentProcessor(PricingService pricing) {
-        this.pricing = pricing;
+        this.strategyContext = new PaymentStrategyContext(pricing);
     }
 
     /**
-     * Process cash payment
+     * Process cash payment using strategy pattern
      */
     public Payment.Receipt processCashPayment(Bill bill, double amount, DiscountPolicy activeDiscount) {
-        validateCashAmount(amount);
-
         try {
-            pricing.finalizePricing(bill, activeDiscount);
-            Money billTotal = bill.total();
-
-            // Validate sufficient payment amount
-            if (Money.of(amount).compareTo(billTotal) < 0) {
-                throw new POSOperationException("Insufficient payment amount. Bill total: " + billTotal + ", Payment: LKR " + String.format("%.2f", amount));
-            }
-
-            var cash = new CashPayment();
-            return cash.pay(billTotal, Money.of(amount));
-        } catch (POSOperationException e) {
-            throw e;
+            return strategyContext.processPayment("CASH", bill, activeDiscount, amount);
+        } catch (IllegalArgumentException e) {
+            throw new POSOperationException(e.getMessage(), e);
         } catch (Exception e) {
             throw new POSOperationException("Cash payment processing failed: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Process card payment
+     * Process card payment using strategy pattern
      */
     public Payment.Receipt processCardPayment(Bill bill, String last4, DiscountPolicy activeDiscount) {
-        validateCardNumber(last4);
-
         try {
-            pricing.finalizePricing(bill, activeDiscount);
-            var card = new CardPayment(last4);
-            return card.pay(bill.total(), bill.total());
+            return strategyContext.processPayment("CARD", bill, activeDiscount, last4);
         } catch (IllegalArgumentException e) {
             throw new POSOperationException("Card payment declined or invalid: " + e.getMessage(), e);
         } catch (Exception e) {
             throw new POSOperationException("Card payment processing failed: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Validates the cash payment amount
-     */
-    private void validateCashAmount(double amount) {
-        if (amount <= 0) {
-            throw new POSOperationException("Cash amount must be greater than zero. Provided: " + amount);
-        }
-        if (amount > 100000) {
-            throw new POSOperationException("Cash amount too large. Maximum allowed: 100000. Provided: " + amount);
-        }
-    }
-
-    /**
-     * Validates the card number format (last 4 digits)
-     */
-    private void validateCardNumber(String last4) {
-        if (last4 == null) {
-            throw new POSOperationException("Card number cannot be null");
-        }
-        if (last4.trim().isEmpty()) {
-            throw new POSOperationException("Card number cannot be empty");
-        }
-        if (!last4.matches("^\\d{4}$")) {
-            throw new POSOperationException("Card number must be 4 digits");
         }
     }
 
