@@ -234,31 +234,13 @@ class PricingServiceTest {
     private Money calculateLineTotal(Money unitPrice, int quantity, DiscountPolicy discount) {
         Money total = unitPrice.multiply(quantity);
         if (discount != null) {
-            // Simple discount application for testing
-            if (discount instanceof PercentageDiscount) {
-                PercentageDiscount pd = (PercentageDiscount) discount;
-                // Access the percentage value through appropriate method or field
-                double percentage = getPercentage(pd);
-                total = total.multiply(1.0 - percentage / 100.0);
-            } else if (discount instanceof BogoPolicy) {
-                // Buy one get one free - pay for half rounded up
-                int payFor = (quantity + 1) / 2;
-                total = unitPrice.multiply(payFor);
-            }
+            // Create a mock bill to calculate discount properly
+            domain.billing.Bill mockBill = new domain.billing.Bill("TEST-001");
+            mockBill.addLine(new domain.billing.BillLine("TEST", "Test Item", unitPrice, quantity, java.util.List.of()));
+            Money discountAmount = discount.computeDiscount(mockBill);
+            total = total.minus(discountAmount);
         }
         return total;
-    }
-
-    // Helper method to get percentage from PercentageDiscount
-    private double getPercentage(PercentageDiscount discount) {
-        // Since percentage() method doesn't exist, we'll use reflection or return a default
-        try {
-            var field = discount.getClass().getDeclaredField("percentage");
-            field.setAccessible(true);
-            return (Double) field.get(discount);
-        } catch (Exception e) {
-            return 10.0; // Default percentage for testing
-        }
     }
 
     private Money calculateSubtotal(List<LineItem> items) {

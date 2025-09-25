@@ -211,9 +211,13 @@ class POSWorkflowIntegrationTest {
 
     private Bill getCurrentBill() {
         try {
-            var field = POSController.class.getDeclaredField("active");
-            field.setAccessible(true);
-            return (Bill) field.get(pos);
+            var billManagerField = POSController.class.getDeclaredField("billManager");
+            billManagerField.setAccessible(true);
+            Object billManager = billManagerField.get(pos);
+
+            var activeField = billManager.getClass().getDeclaredField("active");
+            activeField.setAccessible(true);
+            return (Bill) activeField.get(billManager);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -354,9 +358,18 @@ class POSWorkflowIntegrationTest {
         // Minimal implementations for other required methods
         @Override public void commitReservations(Iterable<InventoryReservation> reservations) {}
         @Override public void commitStoreReservations(Iterable<InventoryReservation> reservations) {}
-        @Override public int shelfQty(String itemCode) { return 0; }
-        @Override public int storeQty(String itemCode) { return 0; }
-        @Override public int mainStoreQty(String itemCode) { return 0; }
+        @Override public int shelfQty(String itemCode) {
+            TestQuantities qty = quantities.get(itemCode);
+            return qty != null ? qty.shelf : 0;
+        }
+        @Override public int storeQty(String itemCode) {
+            TestQuantities qty = quantities.get(itemCode);
+            return qty != null ? qty.store : 0;
+        }
+        @Override public int mainStoreQty(String itemCode) {
+            TestQuantities qty = quantities.get(itemCode);
+            return qty != null ? qty.main : 0;
+        }
         @Override public void moveStoreToShelfFEFO(String itemCode, int qty) {}
         @Override public void moveMainToShelfFEFO(String itemCode, int qty) {}
         @Override public void moveMainToStoreFEFO(String itemCode, int qty) {}

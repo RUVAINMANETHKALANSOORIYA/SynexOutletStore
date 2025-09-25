@@ -105,7 +105,13 @@ class AuthServiceTest {
     @Test
     @DisplayName("AuthService failed login with disabled user")
     void failed_login_disabled_user() {
+        // Ensure the disabled user has the correct password and status
         fakeRepository.setPassword("disabled", "password123");
+        
+        // Verify the user exists and is disabled before testing login
+        Optional<User> disabledUser = fakeRepository.findByUsername("disabled");
+        assertTrue(disabledUser.isPresent());
+        assertEquals("DISABLED", disabledUser.get().status());
 
         boolean result = authService.login("disabled", "password123");
 

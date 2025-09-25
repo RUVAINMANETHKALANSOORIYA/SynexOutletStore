@@ -168,7 +168,7 @@ class POSControllerTest {
         invRepo.setItem("E", "Egg", 10.0);
         invRepo.setQuantities("E", 0, 1, 0, 50);
         pos.addItem("E", 1);
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> pos.checkout());
+        POSController.POSOperationException ex = assertThrows(POSController.POSOperationException.class, () -> pos.checkout());
         assertTrue(ex.getMessage().toLowerCase().contains("payment"));
     }
 
@@ -237,9 +237,13 @@ class POSControllerTest {
     private static final class TestUtil {
         static Bill getActive(POSController pos) {
             try {
-                var f = POSController.class.getDeclaredField("active");
-                f.setAccessible(true);
-                return (Bill) f.get(pos);
+                var billManagerField = POSController.class.getDeclaredField("billManager");
+                billManagerField.setAccessible(true);
+                Object billManager = billManagerField.get(pos);
+
+                var activeField = billManager.getClass().getDeclaredField("active");
+                activeField.setAccessible(true);
+                return (Bill) activeField.get(billManager);
             } catch (Exception e) { throw new RuntimeException(e); }
         }
     }
